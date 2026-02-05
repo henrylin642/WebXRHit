@@ -67,6 +67,7 @@ const USE_MARKER_WIDTH_SCALE = true;
 const INVERT_MARKER_OFFSET = true;
 const WORLD_Y_OFFSET = 0.0;
 const ALIGN_MODE = "gravity+board"; // "gravity+board" | "full"
+let pendingWebXRStart = false;
 
 // UI Elements
 let ui = {
@@ -75,6 +76,8 @@ let ui = {
   transition: document.getElementById('transition-overlay'),
   lockProgress: document.getElementById('lock-progress'),
   loading: document.getElementById('loading-screen'),
+  webxrStartOverlay: document.getElementById('webxr-start-overlay'),
+  webxrStartBtn: document.getElementById('webxr-start-btn'),
   runtime: document.getElementById('runtime-ui'),
   arButton: document.getElementById('ar-button'),
   poseInfo: document.getElementById('pose-info'),
@@ -130,6 +133,14 @@ async function init() {
       } else {
         alert("Invalid width");
       }
+    });
+  }
+
+  if (ui.webxrStartBtn) {
+    ui.webxrStartBtn.addEventListener('click', () => {
+      pendingWebXRStart = false;
+      if (ui.webxrStartOverlay) ui.webxrStartOverlay.style.display = 'none';
+      startWebXRSession();
     });
   }
 
@@ -205,8 +216,12 @@ async function startMindARPhase() {
     const video = document.querySelector('video');
     if (video) {
       const updateVideoSize = () => {
-        lastVideoSize.width = video.videoWidth || 0;
-        lastVideoSize.height = video.videoHeight || 0;
+        const track = video.srcObject && video.srcObject.getVideoTracks
+          ? video.srcObject.getVideoTracks()[0]
+          : null;
+        const settings = track && track.getSettings ? track.getSettings() : null;
+        lastVideoSize.width = (settings && settings.width) || video.videoWidth || 0;
+        lastVideoSize.height = (settings && settings.height) || video.videoHeight || 0;
       };
       updateVideoSize();
       video.addEventListener('loadedmetadata', updateVideoSize);
@@ -322,7 +337,6 @@ async function transitionToWebXR() {
   if (video) video.remove();
   const canvas = document.querySelector('canvas');
   if (canvas) canvas.remove();
-  if (ui.webxrStartOverlay) ui.webxrStartOverlay.style.display = 'none';
   startWebXRSession();
 }
 
@@ -343,8 +357,11 @@ async function startWebXRSession() {
     setupWebXRScene(session);
   } catch (e) {
     error("WebXR Start Failed: " + e);
+    if (String(e).includes('user activation')) {
+      pendingWebXRStart = true;
+      if (ui.webxrStartOverlay) ui.webxrStartOverlay.style.display = 'flex';
+    }
     webxrSessionStarting = false;
-    if (ui.webxrStartOverlay) ui.webxrStartOverlay.style.display = 'flex';
   }
 }
 
