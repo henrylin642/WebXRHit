@@ -1,5 +1,6 @@
 // REMOVE IMPORT: import * as THREE from 'three';
 // USE GLOBAL THREE INSTEAD
+// GLTFLoader is also global: THREE.GLTFLoader
 const THREE = window.THREE; // Ensure we use the CDN-loaded THREE
 import { SceneManager } from './SceneManager.js';
 
@@ -25,11 +26,6 @@ window.onerror = function (msg, url, lineNo, columnNo, error) {
   return false;
 };
 
-// Check Dependencies
-if (!THREE) {
-  error("CRITICAL: Three.js not loaded!");
-}
-
 // --- State Machine ---
 const AppState = {
   INIT: 'INIT',
@@ -49,7 +45,7 @@ let webxrRenderer = null;
 let scene = null;
 let camera = null;
 let sceneManager = null;
-let clock = new THREE.Clock();
+let clock = window.THREE ? new THREE.Clock() : null;
 
 // MindAR Data
 let mindarAnchor = null;
@@ -63,7 +59,7 @@ let hitTestSource = null;
 let isAnchorPlaced = false;
 
 // --- UI Elements ---
-const ui = {
+let ui = {
   overlay: document.getElementById('overlay'),
   mindarScanning: document.getElementById('mindar-scanning-ui'),
   transition: document.getElementById('transition-overlay'),
@@ -77,17 +73,53 @@ const ui = {
 // --- Initialization ---
 async function init() {
   log('State: INIT');
-  log('Checking Dependencies...');
-  if (window.MINDAR) {
-    log('MindAR Loaded v' + (window.MINDAR.version || 'Unknown'));
-  } else {
-    error('MindAR Object NOT found on window');
-  }
+  log('Waiting for Libraries (Polling)...');
 
   if (ui.arButton) {
+    ui.arButton.disabled = true;
+    ui.arButton.innerText = "Loading Libraries...";
+  }
+
+  // Poll for Dependencies
+  const maxRetries = 200; // 20 seconds total
+  let attempts = 0;
+
+  const checkDeps = setInterval(() => {
+    attempts++;
+    // Check for specific deep properties to ensure full load
+    const mindArReady = window.MINDAR && window.MINDAR.IMAGE;
+    const threeReady = window.THREE && window.THREE.WebGLRenderer;
+
+    if (mindArReady && threeReady) {
+      clearInterval(checkDeps);
+      log('Dependencies Ready: MindAR & THREE');
+      // Re-initialize clock now that THREE is definitely valid
+      if (!clock) clock = new THREE.Clock();
+      enableStartButton();
+    } else if (attempts >= maxRetries) {
+      clearInterval(checkDeps);
+      error('Timeout: Libraries not fully loaded after 20s');
+
+      if (!threeReady) error('Missing: THREE (or WebGLRenderer)');
+      if (!mindArReady) error('Missing: MINDAR (or MINDAR.IMAGE)');
+    }
+  }, 100);
+}
+
+function enableStartButton() {
+  // Recheck elements in case of DOM issues
+  ui.arButton = document.getElementById('ar-button');
+  if (ui.arButton) {
+    ui.arButton.innerText = "Start Experience";
+    ui.arButton.disabled = false;
+    ui.arButton.style.opacity = "1";
+    ui.arButton.style.cursor = "pointer";
+    // Clone/replace to clear listeners
+    const newBtn = ui.arButton.cloneNode(true);
+    ui.arButton.parentNode.replaceChild(newBtn, ui.arButton);
+    ui.arButton = newBtn;
+
     ui.arButton.addEventListener('click', startMindARPhase);
-  } else {
-    error("AR Button not found!");
   }
 }
 
@@ -321,7 +353,7 @@ function setupWebXRScene(session) {
 let stableFramesCount = 0;
 
 function renderWebXR(timestamp, frame) {
-  const delta = clock.getDelta();
+  const delta = clock ? clock.getDelta() : 0.016;
   sceneManager.update(delta);
 
   if (!frame) return;
