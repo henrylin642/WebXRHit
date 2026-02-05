@@ -57,6 +57,7 @@ let PHYSICAL_MARKER_WIDTH = 0.55;
 const MAX_MARKER_DISTANCE = 5;
 let webxrSessionStarting = false;
 const USE_GRAVITY_ALIGN = true;
+const FLIP_MARKER_Z = true;
 
 // UI Elements
 let ui = {
@@ -257,6 +258,7 @@ function bufferPose(group, camera) {
   camera.getWorldPosition(camPos);
   camera.getWorldQuaternion(camQuat);
   const relPos = groupPos.clone().sub(camPos).applyQuaternion(camQuat.clone().invert());
+  if (FLIP_MARKER_Z) relPos.z *= -1;
   relPos.multiplyScalar(PHYSICAL_MARKER_WIDTH);
   const relQuat = camQuat.clone().invert().multiply(groupQuat);
   poseBuffer.push({ position: relPos, quaternion: relQuat });
@@ -407,7 +409,7 @@ function lockWorldOrigin(viewerPose) {
   let finalRotation = markerWorldRot;
   if (USE_GRAVITY_ALIGN) {
     // Yaw-only: keep vertical axis aligned to gravity, align Z to marker normal projected on XZ.
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(markerWorldRot);
+    const forward = new THREE.Vector3(0, 0, FLIP_MARKER_Z ? 1 : -1).applyQuaternion(markerWorldRot);
     forward.y = 0;
     if (forward.lengthSq() < 1e-6) {
       forward.set(0, 0, -1);
