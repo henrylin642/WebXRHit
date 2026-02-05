@@ -254,7 +254,8 @@ function bufferPose(group, camera) {
   // MindAR anchor.group world matrix encodes the camera-relative pose.
   const relPos = new THREE.Vector3();
   const relQuat = new THREE.Quaternion();
-  group.matrixWorld.decompose(relPos, relQuat, new THREE.Vector3());
+  // MindAR updates anchor.group.matrix directly (matrixAutoUpdate is false).
+  group.matrix.decompose(relPos, relQuat, new THREE.Vector3());
   if (FLIP_MARKER_Z) relPos.z *= -1;
   lastMindarRawPose = { position: relPos.clone(), quaternion: relQuat.clone() };
   relPos.multiplyScalar(PHYSICAL_MARKER_WIDTH);
