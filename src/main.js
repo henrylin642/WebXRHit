@@ -63,7 +63,7 @@ let webxrSessionStarting = false;
 const USE_GRAVITY_ALIGN = true;
 const FLIP_MARKER_Z = true;
 const AUTO_NORMALIZE_BY_VIDEO = true;
-const USE_MARKER_WIDTH_SCALE = false;
+const USE_MARKER_WIDTH_SCALE = true;
 
 // UI Elements
 let ui = {
@@ -295,7 +295,7 @@ function bufferPose(group, camera) {
       `dxyz: (${dx.toFixed(3)}, ${dy.toFixed(3)}, ${dz.toFixed(3)})\n` +
       `rot: (${degX.toFixed(1)}, ${degY.toFixed(1)}, ${degZ.toFixed(1)})\n` +
       `video: (${lastVideoSize.width}x${lastVideoSize.height})\n` +
-      `scale: ${scaleFactor.toFixed(3)}`;
+      `scale: ${scaleFactor.toFixed(3)} dist: ${scaledPos.length().toFixed(3)}`;
   }
 }
 
