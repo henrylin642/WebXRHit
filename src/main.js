@@ -65,6 +65,8 @@ const FLIP_MARKER_Z = true;
 const AUTO_NORMALIZE_BY_VIDEO = true;
 const USE_MARKER_WIDTH_SCALE = true;
 const INVERT_MARKER_OFFSET = true;
+const WORLD_Y_OFFSET = 0.0;
+const ALIGN_MODE = "gravity+board"; // "gravity+board" | "full"
 
 // UI Elements
 let ui = {
@@ -465,6 +467,7 @@ function renderWebXR(timestamp, frame) {
       `camL: (${camLocalPos.x.toFixed(3)}, ${camLocalPos.y.toFixed(3)}, ${camLocalPos.z.toFixed(3)})\n` +
       `rot: (${camRot.x.toFixed(1)}, ${camRot.y.toFixed(1)}, ${camRot.z.toFixed(1)})\n` +
       `root: (${rootPos.x.toFixed(3)}, ${rootPos.y.toFixed(3)}, ${rootPos.z.toFixed(3)})\n` +
+      `yOff: ${WORLD_Y_OFFSET.toFixed(2)} mode: ${ALIGN_MODE}\n` +
       (stabilizedPos
         ? `stb: (${stabilizedPos.x.toFixed(3)}, ${stabilizedPos.y.toFixed(3)}, ${stabilizedPos.z.toFixed(3)})`
         : `stb: (n/a)`);
@@ -491,19 +494,24 @@ function lockWorldOrigin(viewerPose) {
     offsetPos.setLength(MAX_MARKER_DISTANCE);
   }
   const markerWorldPos = cameraPosition.clone().add(offsetPos);
+  markerWorldPos.y += WORLD_Y_OFFSET;
   const markerWorldRot = cameraQuaternion.clone().multiply(stabilizedPose.quaternion);
   let finalRotation = markerWorldRot;
   if (USE_GRAVITY_ALIGN) {
-    // Yaw-only: keep vertical axis aligned to gravity, align Z to marker normal projected on XZ.
-    const forward = new THREE.Vector3(0, 0, FLIP_MARKER_Z ? 1 : -1).applyQuaternion(markerWorldRot);
-    forward.y = 0;
-    if (forward.lengthSq() < 1e-6) {
-      forward.set(0, 0, -1);
+    if (ALIGN_MODE === "full") {
+      finalRotation = markerWorldRot;
     } else {
-      forward.normalize();
+      // gravity+board: keep Y vertical, align Z to marker normal projected on XZ.
+      const forward = new THREE.Vector3(0, 0, FLIP_MARKER_Z ? 1 : -1).applyQuaternion(markerWorldRot);
+      const up = new THREE.Vector3(0, 1, 0);
+      const fwd = forward.clone().projectOnPlane(up);
+      if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, -1);
+      fwd.normalize();
+      const right = new THREE.Vector3().crossVectors(up, fwd).normalize();
+      const correctedForward = new THREE.Vector3().crossVectors(right, up).normalize();
+      const m = new THREE.Matrix4().makeBasis(right, up, correctedForward);
+      finalRotation = new THREE.Quaternion().setFromRotationMatrix(m);
     }
-    const yaw = Math.atan2(forward.x, forward.z);
-    finalRotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0, 'YXZ'));
   }
   sceneManager.worldRoot.position.copy(markerWorldPos);
   sceneManager.worldRoot.quaternion.copy(finalRotation);
