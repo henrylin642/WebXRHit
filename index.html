@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MindAR to WebXR Transition</title>
+    <link rel="stylesheet" href="/src/style.css" />
+    <!-- MindAR Adapter for Three.js -->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"></script>
+</head>
+
+<body>
+    <div id="ar-overlay-root">
+
+        <!-- Initial Start / Overlay -->
+        <div id="overlay">
+            <button id="ar-button">Start Experience</button>
+        </div>
+
+        <!-- MindAR Scanning UI -->
+        <div id="mindar-scanning-ui"
+            style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10;">
+            <div
+                style="position: absolute; top: 20px; width: 100%; text-align: center; color: white; background: rgba(0,0,0,0.5); padding: 10px;">
+                <div style="font-size: 18px; font-weight: bold;">步驟 1: 掃描圖片</div>
+                <div>請將鏡頭對準目標圖片</div>
+            </div>
+            <!-- Reticle or Scan Frame -->
+            <div
+                style="position: absolute; top: 50%; left: 50%; width: 60vw; height: 60vw; border: 2px solid rgba(255,255,255,0.8); transform: translate(-50%, -50%); border-radius: 10px;">
+                <div
+                    style="position: absolute; top:-2px; left:-2px; width: 20px; height: 20px; border-top: 4px solid #00ff88; border-left: 4px solid #00ff88;">
+                </div>
+                <div
+                    style="position: absolute; top:-2px; right:-2px; width: 20px; height: 20px; border-top: 4px solid #00ff88; border-right: 4px solid #00ff88;">
+                </div>
+                <div
+                    style="position: absolute; bottom:-2px; left:-2px; width: 20px; height: 20px; border-bottom: 4px solid #00ff88; border-left: 4px solid #00ff88;">
+                </div>
+                <div
+                    style="position: absolute; bottom:-2px; right:-2px; width: 20px; height: 20px; border-bottom: 4px solid #00ff88; border-right: 4px solid #00ff88;">
+                </div>
+            </div>
+        </div>
+
+        <!-- Transition Locking UI (Critical Section) -->
+        <div id="transition-overlay"
+            style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.2);">
+            <div
+                style="background: rgba(0, 0, 0, 0.85); padding: 30px; border-radius: 16px; text-align: center; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+                <div style="font-size: 40px; margin-bottom: 20px;">✋</div>
+                <div style="color: white; font-size: 24px; font-weight: bold; margin-bottom: 8px;">請保持不動</div>
+                <div style="color: #ccc; font-size: 14px;">正在鎖定空間座標...</div>
+                <div
+                    style="width: 100%; height: 6px; background: #333; margin-top: 20px; border-radius: 3px; overflow: hidden;">
+                    <div id="lock-progress"
+                        style="width: 0%; height: 100%; background: #00ff88; transition: width 0.1s;"></div>
+                </div>
+                <div style="color: #888; font-size: 12px; margin-top: 10px;">請勿移動手機，避免座標偏移</div>
+            </div>
+        </div>
+
+        <!-- WebXR Loading Screen -->
+        <div id="loading-screen" style="display: none;">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <p>正在啟動 AR 體驗...</p>
+            </div>
+        </div>
+
+        <!-- Runtime UI (After transition) -->
+        <div id="runtime-ui" style="display: none;">
+            <!-- Exit/Home Button -->
+            <div id="exit-ar-btn" title="Exit AR">🏠</div>
+            <!-- SLAM Quality Indicator -->
+            <div id="slam-status" class="slam-good">SLAM: Stable</div>
+            <!-- Snapshot -->
+            <div id="snapshot-btn"></div>
+            <!-- Pose Info -->
+            <div id="pose-info">AR View</div>
+            <!-- Gallery -->
+            <div id="gallery-strip" style="display: none;"></div>
+        </div>
+
+        <div id="iframe-overlay" style="display: none;">
+            <div class="iframe-header">
+                <button id="close-iframe">Close</button>
+            </div>
+            <iframe id="web-iframe" src=""></iframe>
+        </div>
+
+        <!-- Full Gallery Overlay -->
+        <div id="full-gallery-overlay" style="display: none;">
+            <div class="gallery-header">
+                <h2>所有照片</h2>
+                <button id="close-full-gallery">✖️ 關閉</button>
+            </div>
+            <div id="full-gallery-grid"></div>
+        </div>
+
+        <!-- Photo Preview Modal -->
+        <div id="photo-preview-modal" style="display: none;">
+            <div id="close-preview">&times;</div>
+            <div class="preview-content">
+                <img id="preview-img" src="" alt="AR Snapshot" />
+                <div class="preview-actions">
+                    <button id="save-photo">💾 儲存</button>
+                    <button id="share-photo">🔗 分享</button>
+                    <button id="close-preview-btn">✖️ 返回</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="debug-console"></div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
