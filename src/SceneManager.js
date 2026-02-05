@@ -1,7 +1,5 @@
-// REMOVE IMPORT: import * as THREE from 'three';
-// USE GLOBAL THREE INSTEAD
-// GLTFLoader is also global: THREE.GLTFLoader
-const THREE = window.THREE;
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export class SceneManager {
     constructor(scene, camera, logger) {
@@ -9,14 +7,11 @@ export class SceneManager {
         this.camera = camera;
         this.log = logger || console.log;
 
-        // The Root container for all AR content.
-        // We will move THIS container to match the MindAR anchor.
         this.worldRoot = new THREE.Group();
         this.scene.add(this.worldRoot);
 
         this.raycaster = new THREE.Raycaster();
         this.objectsToIntersect = [];
-        this.eventListeners = {};
     }
 
     loadSceneConfig(configUrl) {
@@ -28,13 +23,11 @@ export class SceneManager {
             })
             .catch(err => {
                 this.log('Error loading config: ' + err);
-                // Fallback: Add a simple cube if config fails
                 this.addTestCube();
             });
     }
 
     addTestCube() {
-        // Red Cube for debugging visibility
         const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
         const material = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
         const cube = new THREE.Mesh(geometry, material);
@@ -44,20 +37,14 @@ export class SceneManager {
     buildSceneFromConfig(config) {
         if (!config.objects) return;
 
-        // Use global GLTFLoader attached to THREE namespace
-        if (!THREE.GLTFLoader) {
-            this.log("Error: THREE.GLTFLoader not found!");
-            return;
-        }
-
-        const loader = new THREE.GLTFLoader();
+        const loader = new GLTFLoader();
 
         config.objects.forEach(objData => {
             if (objData.type === 'model') {
                 loader.load(objData.url, (gltf) => {
                     const model = gltf.scene;
                     this.applyTransform(model, objData);
-                    model.userData = { ...objData }; // Store metadata
+                    model.userData = { ...objData };
                     this.worldRoot.add(model);
 
                     if (objData.interactive) {
@@ -67,7 +54,6 @@ export class SceneManager {
                     this.log(`Failed to load model ${objData.url}: ${err}`);
                 });
             } else if (objData.type === 'primitive') {
-                // Handle basic cues/spheres
                 let geo, mat;
                 if (objData.shape === 'sphere') {
                     geo = new THREE.SphereGeometry(objData.scale?.x || 0.1);
@@ -99,7 +85,6 @@ export class SceneManager {
     }
 
     update(delta) {
-        // Animation updates if needed
         this.worldRoot.children.forEach(child => {
             if (child.userData && child.userData.animate) {
                 child.rotation.y += delta * 0.5;
@@ -119,13 +104,5 @@ export class SceneManager {
             return intersects[0].object;
         }
         return null;
-    }
-
-    getObjectName(object) {
-        return object.userData.id || 'Unknown Object';
-    }
-
-    triggerEvent(layoutId, value) {
-        this.log(`Trigger event for ${layoutId}: ${value}`);
     }
 }

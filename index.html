@@ -7,57 +7,24 @@
     <title>MindAR to WebXR Transition</title>
     <link rel="stylesheet" href="/src/style.css" />
 
-    <script>
-        // Global Error Handler & Lib Check
-        window.libsLoaded = { three: false, mindar: false };
-        window.addEventListener('error', function (e) {
-            var dbg = document.getElementById('debug-console');
-            if (dbg) dbg.innerText += '[Global Err] ' + e.message + '\n';
-        });
-
-        function markThreeLoaded() {
-            window.libsLoaded.three = true;
-            var dbg = document.getElementById('debug-console');
-            if (dbg && window.THREE) dbg.innerText += '[Sys] THREE v' + THREE.REVISION + ' Loaded\n';
-            if (window.checkReady) window.checkReady();
-        }
-
-        function markMindARLoaded() {
-            window.libsLoaded.mindar = true;
-            var dbg = document.getElementById('debug-console');
-            if (dbg) dbg.innerText += '[Sys] MindAR Script Loaded\n';
-            if (window.MINDAR) {
-                if (dbg) dbg.innerText += '[Sys] MINDAR Object Found\n';
-            } else {
-                if (dbg) dbg.innerText += '[Sys] MINDAR Object Missing on Load!\n';
-            }
-            if (window.checkReady) window.checkReady();
-        }
-
-        function checkReady() {
-            if (window.libsLoaded.three && window.libsLoaded.mindar) {
-                var btn = document.getElementById('ar-button');
-                // We leave the enabling to main.js polling to be safe, 
-                // but this visual feedback helps debugging Index level loading
-                if (btn) {
-                    btn.innerText = "Initializing...";
-                }
-            }
-        }
+    <!-- Import Map for reliable module loading (Recommended by MindAR Docs) -->
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+        "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+      }
+    }
     </script>
 
-    <!-- Three.js (r147) from JSDELIVR (More stable than UNPKG) -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js" onload="markThreeLoaded()"
-        onerror="document.getElementById('debug-console').innerText += '[Load Error] Three.js Failed\n'"></script>
-
-    <!-- GLTFLoader (r147) -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"
-        onload="document.getElementById('debug-console').innerText += '[Sys] GLTFLoader Loaded\n'"
-        onerror="document.getElementById('debug-console').innerText += '[Load Error] GLTFLoader Failed\n'"></script>
-
-    <!-- MindAR Adapter -->
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js" onload="markMindARLoaded()"
-        onerror="document.getElementById('debug-console').innerText += '[Load Error] MindAR Failed\n'"></script>
+    <!-- Global Error Handler -->
+    <script>
+        window.addEventListener('error', function (e) {
+            const dbg = document.getElementById('debug-console');
+            if (dbg) dbg.innerText += '[Err] ' + e.message + '\n';
+        });
+    </script>
 </head>
 
 <body>
@@ -65,7 +32,7 @@
 
         <!-- Initial Start / Overlay -->
         <div id="overlay">
-            <button id="ar-button" disabled style="opacity: 0.5;">Loading Libraries...</button>
+            <button id="ar-button">Start Experience</button>
         </div>
 
         <!-- MindAR Scanning UI -->
@@ -164,8 +131,8 @@
 
         <div id="debug-console"></div>
     </div>
-    <!-- Load main script as module with cache busting version -->
-    <script type="module" src="/src/main.js?v=2"></script>
+    <!-- Load main script as module (Import Map handles dependencies) -->
+    <script type="module" src="/src/main.js?v=modules"></script>
 </body>
 
 </html>

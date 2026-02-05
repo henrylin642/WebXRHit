@@ -1,7 +1,5 @@
-// REMOVE IMPORT: import * as THREE from 'three';
-// USE GLOBAL THREE INSTEAD
-// GLTFLoader is also global: THREE.GLTFLoader
-const THREE = window.THREE; // Ensure we use the CDN-loaded THREE
+import * as THREE from 'three';
+import { MindARThree } from 'mindar-image-three';
 import { SceneManager } from './SceneManager.js';
 
 // --- Debug & Logger ---
@@ -45,20 +43,16 @@ let webxrRenderer = null;
 let scene = null;
 let camera = null;
 let sceneManager = null;
-let clock = window.THREE ? new THREE.Clock() : null;
+let clock = new THREE.Clock();
 
 // MindAR Data
 let mindarAnchor = null;
 let poseBuffer = [];
-const POSE_BUFFER_SIZE = 15; // Frames to average
+const POSE_BUFFER_SIZE = 15;
 let poseStabilizeTimer = null;
-let stabilizedPose = null; // { position: Vector3, quaternion: Quaternion }
+let stabilizedPose = null;
 
-// WebXR Data
-let hitTestSource = null;
-let isAnchorPlaced = false;
-
-// --- UI Elements ---
+// UI Elements
 let ui = {
   overlay: document.getElementById('overlay'),
   mindarScanning: document.getElementById('mindar-scanning-ui'),
@@ -72,53 +66,12 @@ let ui = {
 
 // --- Initialization ---
 async function init() {
-  log('State: INIT');
-  log('Waiting for Libraries (Polling)...');
+  log('State: INIT (ES Modules)');
 
-  if (ui.arButton) {
-    ui.arButton.disabled = true;
-    ui.arButton.innerText = "Loading Libraries...";
-  }
-
-  // Poll for Dependencies
-  const maxRetries = 200; // 20 seconds total
-  let attempts = 0;
-
-  const checkDeps = setInterval(() => {
-    attempts++;
-    // Check for specific deep properties to ensure full load
-    const mindArReady = window.MINDAR && window.MINDAR.IMAGE;
-    const threeReady = window.THREE && window.THREE.WebGLRenderer;
-
-    if (mindArReady && threeReady) {
-      clearInterval(checkDeps);
-      log('Dependencies Ready: MindAR & THREE');
-      // Re-initialize clock now that THREE is definitely valid
-      if (!clock) clock = new THREE.Clock();
-      enableStartButton();
-    } else if (attempts >= maxRetries) {
-      clearInterval(checkDeps);
-      error('Timeout: Libraries not fully loaded after 20s');
-
-      if (!threeReady) error('Missing: THREE (or WebGLRenderer)');
-      if (!mindArReady) error('Missing: MINDAR (or MINDAR.IMAGE)');
-    }
-  }, 100);
-}
-
-function enableStartButton() {
-  // Recheck elements in case of DOM issues
-  ui.arButton = document.getElementById('ar-button');
+  // Dependencies are imported, so they are ready if this script runs
   if (ui.arButton) {
     ui.arButton.innerText = "Start Experience";
     ui.arButton.disabled = false;
-    ui.arButton.style.opacity = "1";
-    ui.arButton.style.cursor = "pointer";
-    // Clone/replace to clear listeners
-    const newBtn = ui.arButton.cloneNode(true);
-    ui.arButton.parentNode.replaceChild(newBtn, ui.arButton);
-    ui.arButton = newBtn;
-
     ui.arButton.addEventListener('click', startMindARPhase);
   }
 }
@@ -133,17 +86,13 @@ async function startMindARPhase() {
 
   // Initialize MindAR Three
   try {
-    if (!window.MINDAR || !window.MINDAR.IMAGE) {
-      throw new Error("MindAR.IMAGE is missing. Upgrade or Check Script.");
-    }
-
     log("Creating MindARThree instance...");
-    mindarThree = new window.MINDAR.IMAGE.MindARThree({
+    mindarThree = new MindARThree({
       container: document.body,
-      imageTargetSrc: '/targets.mind', // Assumed file in public/
-      filterMinCF: 0.0001, // Reduce jitter
+      imageTargetSrc: '/targets.mind',
+      filterMinCF: 0.0001,
       filterBeta: 0.001,
-      uiLoading: 'no', // Disable default loading UI
+      uiLoading: 'no',
       uiScanning: 'no'
     });
   } catch (e) {
@@ -154,14 +103,13 @@ async function startMindARPhase() {
 
   const { renderer, scene: mScene, camera: mCamera } = mindarThree;
 
-  // Setup light for MindAR scene
+  // Setup light
   const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
   mScene.add(light);
 
   // Anchor
   mindarAnchor = mindarThree.addAnchor(0);
 
-  // Visual helper on the anchor
   const geometry = new THREE.SphereGeometry(0.1, 32, 32);
   const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
   const sphere = new THREE.Mesh(geometry, material);
@@ -203,7 +151,7 @@ async function startMindARPhase() {
   }
 }
 
-// --- Phase 2: Pose Stabilization (Critical Section) ---
+// --- Phase 2: Pose Stabilization ---
 function beginPoseStabilization() {
   currentState = AppState.POSE_STABILIZING;
   if (ui.mindarScanning) ui.mindarScanning.style.display = 'none';
@@ -213,7 +161,7 @@ function beginPoseStabilization() {
   poseBuffer = [];
 
   let progress = 0;
-  const duration = 1500; // 1.5s lock time
+  const duration = 1500;
   const interval = 50;
 
   poseStabilizeTimer = setInterval(() => {
@@ -242,7 +190,7 @@ function bufferPose(group) {
 }
 
 function finalizeStabilization() {
-  log('Stabilization Complete. Calculating Average Pose...');
+  log('Stabilization Complete.');
 
   if (poseBuffer.length === 0) {
     error("No poses buffered!");
@@ -250,12 +198,10 @@ function finalizeStabilization() {
     return;
   }
 
-  // Average Position
   const avgPos = new THREE.Vector3();
   poseBuffer.forEach(p => avgPos.add(p.position));
   avgPos.divideScalar(poseBuffer.length);
 
-  // Average Quaternion
   let avgQuat = poseBuffer[0].quaternion.clone();
   for (let i = 1; i < poseBuffer.length; i++) {
     avgQuat.slerp(poseBuffer[i].quaternion, 1 / (i + 1));
@@ -266,8 +212,6 @@ function finalizeStabilization() {
     quaternion: avgQuat
   };
 
-  log(`Stabilized Pose: ${JSON.stringify(stabilizedPose.position)}`);
-
   transitionToWebXR();
 }
 
@@ -275,18 +219,16 @@ function finalizeStabilization() {
 async function transitionToWebXR() {
   currentState = AppState.WEBXR_STARTING;
 
-  log('Stopping MindAR...');
+  log('Stopping MindAR for WebXR...');
   mindarThree.stop();
   mindarThree.renderer.setAnimationLoop(null);
   mindarThree.renderer.dispose();
 
-  // Remove MindAR video/canvas from DOM
   const video = document.querySelector('video');
   if (video) video.remove();
   const canvas = document.querySelector('canvas');
   if (canvas) canvas.remove();
 
-  log('Starting WebXR Session...');
   startWebXRSession();
 }
 
@@ -312,11 +254,9 @@ async function startWebXRSession() {
 }
 
 function setupWebXRScene(session) {
-  // Create new Renderer/Scene for WebXR
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
-  // Lighting
   const hemiLight = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
   hemiLight.position.set(0.5, 1, 0.25);
   scene.add(hemiLight);
@@ -331,15 +271,12 @@ function setupWebXRScene(session) {
   webxrRenderer.xr.setReferenceSpaceType('local');
   document.body.appendChild(webxrRenderer.domElement);
 
-  // Scene Manager (Content)
   sceneManager = new SceneManager(scene, camera, log);
-  sceneManager.loadSceneConfig('/scene.json'); // Load assets
+  sceneManager.loadSceneConfig('/scene.json');
   sceneManager.worldRoot.visible = false;
 
-  // Setup Session
   webxrRenderer.xr.setSession(session);
 
-  // Wait for "Tracking" state
   currentState = AppState.WORLD_LOCKING;
 
   session.addEventListener('end', () => {
@@ -349,11 +286,10 @@ function setupWebXRScene(session) {
   webxrRenderer.setAnimationLoop(renderWebXR);
 }
 
-// --- Phase 4 & 5: World Locking & Running ---
 let stableFramesCount = 0;
 
 function renderWebXR(timestamp, frame) {
-  const delta = clock ? clock.getDelta() : 0.016;
+  const delta = clock.getDelta();
   sceneManager.update(delta);
 
   if (!frame) return;
@@ -363,7 +299,6 @@ function renderWebXR(timestamp, frame) {
   if (currentState === AppState.WORLD_LOCKING) {
     if (!viewerPose) return;
 
-    // Wait for a few stable frames
     if (!viewerPose.emulatedPosition) {
       stableFramesCount++;
     } else {
@@ -376,7 +311,6 @@ function renderWebXR(timestamp, frame) {
   }
 
   if (currentState === AppState.RUNNING) {
-    // SLAM Status Update
     if (ui.poseInfo) {
       ui.poseInfo.innerText = viewerPose && viewerPose.emulatedPosition ? "SLAM: LOST" : "SLAM: Tracking";
     }
@@ -391,29 +325,20 @@ function lockWorldOrigin(viewerPose) {
   const cameraPosition = new THREE.Vector3().copy(viewerPose.transform.position);
   const cameraQuaternion = new THREE.Quaternion().copy(viewerPose.transform.orientation);
 
-  // Marker Position in World = CameraPos + (CameraRot * MindAROffset)
   const offsetPos = stabilizedPose.position.clone();
   offsetPos.applyQuaternion(cameraQuaternion);
   const markerWorldPos = cameraPosition.clone().add(offsetPos);
 
-  // Marker Rotation = CameraRot * MindARRot
   const markerWorldRot = cameraQuaternion.clone().multiply(stabilizedPose.quaternion);
 
   sceneManager.worldRoot.position.copy(markerWorldPos);
-
-  // --- Vertical Alignment (Wall Mode) Fix ---
-  // If we want to align to a vertical wall properly, ensure the Z-axis (normal) 
-  // of the MindAR target maps to horizontal in WebXR.
-  // Usually MindAR "Image Up" is Y.
-  // We already copied rotation. Let's just trust it for now.
   sceneManager.worldRoot.quaternion.copy(markerWorldRot);
   sceneManager.worldRoot.visible = true;
 
-  // Transition UI Done
   if (ui.transition) ui.transition.style.display = 'none';
   if (ui.runtime) ui.runtime.style.display = 'block';
   currentState = AppState.RUNNING;
-  log('Transition Complete. Enjoy!');
+  log('Transition Complete.');
 
   stabilizedPose = null;
   poseBuffer = null;
