@@ -140,7 +140,8 @@ async function startMindARPhase() {
     renderer.setAnimationLoop(() => {
       if (currentState === AppState.MINDAR_TRACKING || currentState === AppState.POSE_STABILIZING) {
         if (currentState === AppState.POSE_STABILIZING) {
-          bufferPose(mindarAnchor.group);
+          // IMPORTANT: Pass camera to bufferPose
+          bufferPose(mindarAnchor.group, mCamera);
         }
       }
       renderer.render(mScene, mCamera);
@@ -182,10 +183,31 @@ function cancelPoseStabilization() {
   if (ui.mindarScanning) ui.mindarScanning.style.display = 'block';
 }
 
-function bufferPose(group) {
+function bufferPose(group, camera) {
+  if (!camera) return;
+
+  // Use world matrices for accuracy
+  group.updateWorldMatrix(true, false);
+  camera.updateWorldMatrix(true, false);
+
+  const groupPos = new THREE.Vector3();
+  const groupQuat = new THREE.Quaternion();
+  group.getWorldPosition(groupPos);
+  group.getWorldQuaternion(groupQuat);
+
+  const camPos = new THREE.Vector3();
+  const camQuat = new THREE.Quaternion();
+  camera.getWorldPosition(camPos);
+  camera.getWorldQuaternion(camQuat);
+
+  // Calculate Target Pose in CAMERA SPACE
+  // This removes the dependency on how MindAR manages the world (Target moving vs Camera moving)
+  const relPos = groupPos.clone().sub(camPos).applyQuaternion(camQuat.clone().invert());
+  const relQuat = camQuat.clone().invert().multiply(groupQuat);
+
   poseBuffer.push({
-    position: group.position.clone(),
-    quaternion: group.quaternion.clone()
+    position: relPos,
+    quaternion: relQuat
   });
 }
 
@@ -320,19 +342,38 @@ function renderWebXR(timestamp, frame) {
 }
 
 function lockWorldOrigin(viewerPose) {
-  log('Locking World Origin...');
+  log('Locking World Origin (Gravity Corrected)...');
 
   const cameraPosition = new THREE.Vector3().copy(viewerPose.transform.position);
   const cameraQuaternion = new THREE.Quaternion().copy(viewerPose.transform.orientation);
 
+  // 1. Calculate the Marker's Position in WebXR Space
+  // offsetPos is the vector "Camera -> Marker" in Camera Space
+  // So we rotate it by Camera Rotation to get World Vector
   const offsetPos = stabilizedPose.position.clone();
   offsetPos.applyQuaternion(cameraQuaternion);
   const markerWorldPos = cameraPosition.clone().add(offsetPos);
 
+  // 2. Calculate the Marker's Rotation in WebXR Space
+  // Marker Rot = Camera Rot * Local Rot
   const markerWorldRot = cameraQuaternion.clone().multiply(stabilizedPose.quaternion);
 
+  // 3. Gravity Correction
+  // We want Y-up.
+  // Use the Marker's forward direction to determine yaw, but force Pitch/Roll to zero (align to gravity)
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(markerWorldRot);
+  forward.y = 0; // Project to floor
+  forward.normalize();
+
+  const gravityAlignedQuaternion = new THREE.Quaternion();
+  const dummyMatrix = new THREE.Matrix4();
+  const targetPos = markerWorldPos.clone().add(forward);
+  dummyMatrix.lookAt(markerWorldPos, targetPos, new THREE.Vector3(0, 1, 0));
+  gravityAlignedQuaternion.setFromRotationMatrix(dummyMatrix);
+
+  // Apply
   sceneManager.worldRoot.position.copy(markerWorldPos);
-  sceneManager.worldRoot.quaternion.copy(markerWorldRot);
+  sceneManager.worldRoot.quaternion.copy(gravityAlignedQuaternion);
   sceneManager.worldRoot.visible = true;
 
   if (ui.transition) ui.transition.style.display = 'none';
