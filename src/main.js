@@ -428,13 +428,14 @@ function renderWebXR(timestamp, frame) {
     const camPos = viewerPose.transform.position;
     const camQuat = viewerPose.transform.orientation;
     const rootPos = sceneManager.worldRoot.position;
+    const rootQuat = sceneManager.worldRoot.quaternion;
     const dx = camPos.x - rootPos.x;
     const dy = camPos.y - rootPos.y;
     const dz = camPos.z - rootPos.z;
     const mindarPos = (stabilizedPose || lastMindarRelPose) ? (stabilizedPose || lastMindarRelPose).position : null;
     const mindarRawPos = lastMindarRawPose ? lastMindarRawPose.position : null;
     const mindarNormPos = lastMindarNormPose ? lastMindarNormPose.position : null;
-    const rootQuatInv = sceneManager.worldRoot.quaternion.clone().invert();
+    const rootQuatInv = rootQuat.clone().invert();
     const camLocalPos = new THREE.Vector3(camPos.x, camPos.y, camPos.z)
       .sub(rootPos)
       .applyQuaternion(rootQuatInv);
@@ -458,7 +459,8 @@ function renderWebXR(timestamp, frame) {
         ? `scaled: (${mindarPos.x.toFixed(3)}, ${mindarPos.y.toFixed(3)}, ${mindarPos.z.toFixed(3)})\n`
         : `scaled: (n/a)\n`) +
       `camL: (${camLocalPos.x.toFixed(3)}, ${camLocalPos.y.toFixed(3)}, ${camLocalPos.z.toFixed(3)})\n` +
-      `rot: (${camRot.x.toFixed(1)}, ${camRot.y.toFixed(1)}, ${camRot.z.toFixed(1)})`;
+      `rot: (${camRot.x.toFixed(1)}, ${camRot.y.toFixed(1)}, ${camRot.z.toFixed(1)})\n` +
+      `root: (${rootPos.x.toFixed(3)}, ${rootPos.y.toFixed(3)}, ${rootPos.z.toFixed(3)})`;
   }
   if (currentState === AppState.RUNNING) {
     if (ui.poseInfo) ui.poseInfo.innerText = viewerPose && viewerPose.emulatedPosition ? "SLAM: LOST" : "SLAM: Tracking";
@@ -468,6 +470,10 @@ function renderWebXR(timestamp, frame) {
 
 function lockWorldOrigin(viewerPose) {
   log('Locking World Origin...');
+  if (!stabilizedPose) {
+    error("No stabilized pose; cannot lock world origin.");
+    return;
+  }
   const cameraPosition = new THREE.Vector3().copy(viewerPose.transform.position);
   const cameraQuaternion = new THREE.Quaternion().copy(viewerPose.transform.orientation);
   const offsetPos = stabilizedPose.position.clone();
