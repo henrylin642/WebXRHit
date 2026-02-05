@@ -155,8 +155,8 @@ async function startMindARPhase() {
       imageTargetSrc: '/targets.mind',
       video: {
         facingMode: 'environment',
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
+        width: { min: 1280, ideal: 1920 },
+        height: { min: 720, ideal: 1080 }
       },
       filterMinCF: 0.0001,
       filterBeta: 0.001,
