@@ -52,6 +52,7 @@ const POSE_BUFFER_SIZE = 15;
 let poseStabilizeTimer = null;
 let stabilizedPose = null;
 let lastMindarRelPose = null;
+let lastMindarRawPose = null;
 
 // IMPORTANT: Physical width of the marker in meters.
 let PHYSICAL_MARKER_WIDTH = 0.55;
@@ -256,6 +257,7 @@ function bufferPose(group, camera) {
   const relQuat = new THREE.Quaternion();
   relMatrix.decompose(relPos, relQuat, new THREE.Vector3());
   if (FLIP_MARKER_Z) relPos.z *= -1;
+  lastMindarRawPose = { position: relPos.clone(), quaternion: relQuat.clone() };
   relPos.multiplyScalar(PHYSICAL_MARKER_WIDTH);
   lastMindarRelPose = { position: relPos.clone(), quaternion: relQuat.clone() };
   poseBuffer.push({ position: relPos, quaternion: relQuat });
@@ -393,12 +395,16 @@ function renderWebXR(timestamp, frame) {
     const dy = camPos.y - rootPos.y;
     const dz = camPos.z - rootPos.z;
     const mindarPos = (stabilizedPose || lastMindarRelPose) ? (stabilizedPose || lastMindarRelPose).position : null;
+    const mindarRawPos = lastMindarRawPose ? lastMindarRawPose.position : null;
     ui.cameraPose.innerText =
       `cam: (${camPos.x.toFixed(3)}, ${camPos.y.toFixed(3)}, ${camPos.z.toFixed(3)})\n` +
       `dxyz: (${dx.toFixed(3)}, ${dy.toFixed(3)}, ${dz.toFixed(3)})\n` +
+      (mindarRawPos
+        ? `raw: (${mindarRawPos.x.toFixed(3)}, ${mindarRawPos.y.toFixed(3)}, ${mindarRawPos.z.toFixed(3)})\n`
+        : `raw: (n/a)\n`) +
       (mindarPos
-        ? `mindar: (${mindarPos.x.toFixed(3)}, ${mindarPos.y.toFixed(3)}, ${mindarPos.z.toFixed(3)})`
-        : `mindar: (n/a)`);
+        ? `scaled: (${mindarPos.x.toFixed(3)}, ${mindarPos.y.toFixed(3)}, ${mindarPos.z.toFixed(3)})`
+        : `scaled: (n/a)`);
   }
   if (currentState === AppState.RUNNING) {
     if (ui.poseInfo) ui.poseInfo.innerText = viewerPose && viewerPose.emulatedPosition ? "SLAM: LOST" : "SLAM: Tracking";
