@@ -75,8 +75,6 @@ let ui = {
   transition: document.getElementById('transition-overlay'),
   lockProgress: document.getElementById('lock-progress'),
   loading: document.getElementById('loading-screen'),
-  webxrStartOverlay: document.getElementById('webxr-start-overlay'),
-  webxrStartBtn: document.getElementById('webxr-start-btn'),
   runtime: document.getElementById('runtime-ui'),
   arButton: document.getElementById('ar-button'),
   poseInfo: document.getElementById('pose-info'),
@@ -132,13 +130,6 @@ async function init() {
       } else {
         alert("Invalid width");
       }
-    });
-  }
-
-  if (ui.webxrStartBtn) {
-    ui.webxrStartBtn.addEventListener('click', () => {
-      if (ui.webxrStartOverlay) ui.webxrStartOverlay.style.display = 'none';
-      startWebXRSession();
     });
   }
 
@@ -331,7 +322,8 @@ async function transitionToWebXR() {
   if (video) video.remove();
   const canvas = document.querySelector('canvas');
   if (canvas) canvas.remove();
-  if (ui.webxrStartOverlay) ui.webxrStartOverlay.style.display = 'flex';
+  if (ui.webxrStartOverlay) ui.webxrStartOverlay.style.display = 'none';
+  startWebXRSession();
 }
 
 async function startWebXRSession() {
