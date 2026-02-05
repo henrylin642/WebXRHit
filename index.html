@@ -7,14 +7,27 @@
     <title>MindAR to WebXR Transition</title>
     <link rel="stylesheet" href="/src/style.css" />
 
-    <!-- Three.js (r147) - Global Variable for MindAR compatibility -->
-    <script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
+    <script>
+        // Global Error Handler
+        window.addEventListener('error', function (e) {
+            var consoleDiv = document.getElementById('debug-console');
+            if (consoleDiv) {
+                consoleDiv.innerText += '[Global Error] ' + e.message + '\n';
+            }
+        });
+    </script>
 
-    <!-- GLTFLoader (r147) - Non-module version adds to THREE.GLTFLoader -->
-    <script src="https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+    <!-- Three.js (r147) -->
+    <script src="https://unpkg.com/three@0.147.0/build/three.min.js"
+        onerror="document.getElementById('debug-console').innerText += '[Load Error] Three.js Failed\n'"></script>
 
-    <!-- MindAR Adapter -->
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"></script>
+    <!-- GLTFLoader (r147) -->
+    <script src="https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js"
+        onerror="document.getElementById('debug-console').innerText += '[Load Error] GLTFLoader Failed\n'"></script>
+
+    <!-- MindAR Adapter (Using UNPKG) -->
+    <script src="https://unpkg.com/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+        onerror="document.getElementById('debug-console').innerText += '[Load Error] MindAR Failed\n'"></script>
 </head>
 
 <body>
