@@ -34,6 +34,9 @@ export class SceneManager {
         const cube = new THREE.Mesh(geometry, material);
         cube.position.set(0, 0, -1); // 1 meter in front
         this.worldRoot.add(cube);
+
+        // Add thick axes in fallback too
+        this.addThickAxes(1, 0.02);
     }
 
     buildSceneFromConfig(config) {
@@ -80,9 +83,43 @@ export class SceneManager {
             }
         });
 
-        // Always add AxesHelper to debug orientation
-        const axes = new THREE.AxesHelper(1);
-        this.worldRoot.add(axes);
+        // Add Thicker Axes Helper
+        this.addThickAxes(1, 0.02); // Length 1m, Thickness 2cm
+    }
+
+    addThickAxes(length = 1, thickness = 0.01) {
+        const check = this.worldRoot.getObjectByName("ThickAxes");
+        if (check) return;
+
+        const axesGroup = new THREE.Group();
+        axesGroup.name = "ThickAxes";
+
+        // Materials
+        const red = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const green = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        const blue = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+
+        // X Axis (Red)
+        const xGeo = new THREE.CylinderGeometry(thickness, thickness, length, 12);
+        xGeo.rotateZ(-Math.PI / 2);
+        xGeo.translate(length / 2, 0, 0);
+        const xMesh = new THREE.Mesh(xGeo, red);
+        axesGroup.add(xMesh);
+
+        // Y Axis (Green)
+        const yGeo = new THREE.CylinderGeometry(thickness, thickness, length, 12);
+        yGeo.translate(0, length / 2, 0);
+        const yMesh = new THREE.Mesh(yGeo, green);
+        axesGroup.add(yMesh);
+
+        // Z Axis (Blue)
+        const zGeo = new THREE.CylinderGeometry(thickness, thickness, length, 12);
+        zGeo.rotateX(Math.PI / 2);
+        zGeo.translate(0, 0, length / 2);
+        const zMesh = new THREE.Mesh(zGeo, blue);
+        axesGroup.add(zMesh);
+
+        this.worldRoot.add(axesGroup);
     }
 
     applyTransform(object, data) {
