@@ -54,6 +54,8 @@ let stabilizedPose = null;
 
 // IMPORTANT: Physical width of the marker in meters.
 let PHYSICAL_MARKER_WIDTH = 0.55;
+const MAX_MARKER_DISTANCE = 5;
+let webxrSessionStarting = false;
 
 // UI Elements
 let ui = {
@@ -62,6 +64,8 @@ let ui = {
   transition: document.getElementById('transition-overlay'),
   lockProgress: document.getElementById('lock-progress'),
   loading: document.getElementById('loading-screen'),
+  webxrStartOverlay: document.getElementById('webxr-start-overlay'),
+  webxrStartBtn: document.getElementById('webxr-start-btn'),
   runtime: document.getElementById('runtime-ui'),
   arButton: document.getElementById('ar-button'),
   poseInfo: document.getElementById('pose-info'),
@@ -115,6 +119,13 @@ async function init() {
       } else {
         alert("Invalid width");
       }
+    });
+  }
+
+  if (ui.webxrStartBtn) {
+    ui.webxrStartBtn.addEventListener('click', () => {
+      if (ui.webxrStartOverlay) ui.webxrStartOverlay.style.display = 'none';
+      startWebXRSession();
     });
   }
 
@@ -273,12 +284,15 @@ async function transitionToWebXR() {
   if (video) video.remove();
   const canvas = document.querySelector('canvas');
   if (canvas) canvas.remove();
-  startWebXRSession();
+  if (ui.webxrStartOverlay) ui.webxrStartOverlay.style.display = 'flex';
 }
 
 async function startWebXRSession() {
+  if (webxrSessionStarting) return;
+  webxrSessionStarting = true;
   if (!navigator.xr) {
     alert("WebXR not supported");
+    webxrSessionStarting = false;
     return;
   }
   try {
@@ -290,7 +304,8 @@ async function startWebXRSession() {
     setupWebXRScene(session);
   } catch (e) {
     error("WebXR Start Failed: " + e);
-    location.reload();
+    webxrSessionStarting = false;
+    if (ui.webxrStartOverlay) ui.webxrStartOverlay.style.display = 'flex';
   }
 }
 
@@ -377,11 +392,10 @@ function lockWorldOrigin(viewerPose) {
   const cameraQuaternion = new THREE.Quaternion().copy(viewerPose.transform.orientation);
   const offsetPos = stabilizedPose.position.clone();
   offsetPos.applyQuaternion(cameraQuaternion);
-  let markerWorldPos = cameraPosition.clone().add(offsetPos);
-  if (markerWorldPos.distanceTo(cameraPosition) > 10) {
-    const front = new THREE.Vector3(0, 0, -1).applyQuaternion(cameraQuaternion);
-    markerWorldPos = cameraPosition.clone().add(front);
+  if (offsetPos.length() > MAX_MARKER_DISTANCE) {
+    offsetPos.setLength(MAX_MARKER_DISTANCE);
   }
+  const markerWorldPos = cameraPosition.clone().add(offsetPos);
   const markerWorldRot = cameraQuaternion.clone().multiply(stabilizedPose.quaternion);
   const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(markerWorldRot);
   forward.y = 0; forward.normalize();
