@@ -74,6 +74,7 @@ let ui = {
   arButton: document.getElementById('ar-button'),
   poseInfo: document.getElementById('pose-info'),
   cameraPose: document.getElementById('camera-pose'),
+  mindarPose: document.getElementById('mindar-pose'),
   // Settings UI
   settingsBtn: document.getElementById('settings-btn'),
   settingsModal: document.getElementById('settings-modal'),
@@ -261,6 +262,15 @@ function bufferPose(group, camera) {
   relPos.multiplyScalar(PHYSICAL_MARKER_WIDTH);
   lastMindarRelPose = { position: relPos.clone(), quaternion: relQuat.clone() };
   poseBuffer.push({ position: relPos, quaternion: relQuat });
+
+  if (ui.mindarPose) {
+    const dx = relPos.x;
+    const dy = relPos.y;
+    const dz = relPos.z;
+    ui.mindarPose.innerText =
+      `mindar: (${relPos.x.toFixed(3)}, ${relPos.y.toFixed(3)}, ${relPos.z.toFixed(3)})\n` +
+      `dxyz: (${dx.toFixed(3)}, ${dy.toFixed(3)}, ${dz.toFixed(3)})`;
+  }
 }
 
 function finalizeStabilization() {

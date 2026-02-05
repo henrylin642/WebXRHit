@@ -192,6 +192,20 @@ button:active {
   pointer-events: none;
 }
 
+#mindar-pose {
+  position: absolute;
+  bottom: 240px;
+  left: 20px;
+  color: #00ff00;
+  font-family: monospace;
+  font-size: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 4px;
+  white-space: pre-wrap;
+  z-index: 10000;
+  pointer-events: none;
+}
+
 #settings-btn {
   position: absolute;
   top: 20px;
