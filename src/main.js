@@ -52,6 +52,11 @@ const POSE_BUFFER_SIZE = 15;
 let poseStabilizeTimer = null;
 let stabilizedPose = null;
 
+// IMPORTANT: Physical width of the marker in meters.
+// MindAR coordinates are in "Image Width units". WebXR is in "Meters".
+// We MUST scale the detailed position by this value.
+const PHYSICAL_MARKER_WIDTH = 0.55; // Default: 55cm
+
 // UI Elements
 let ui = {
   overlay: document.getElementById('overlay'),
@@ -201,6 +206,9 @@ function bufferPose(group, camera) {
 
   // Calculate Target Pose in CAMERA SPACE
   const relPos = groupPos.clone().sub(camPos).applyQuaternion(camQuat.clone().invert());
+  // SCALE the position by physical marker width
+  relPos.multiplyScalar(PHYSICAL_MARKER_WIDTH);
+
   const relQuat = camQuat.clone().invert().multiply(groupQuat);
 
   poseBuffer.push({
