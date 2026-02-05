@@ -64,6 +64,7 @@ const USE_GRAVITY_ALIGN = true;
 const FLIP_MARKER_Z = true;
 const AUTO_NORMALIZE_BY_VIDEO = true;
 const USE_MARKER_WIDTH_SCALE = true;
+const INVERT_MARKER_OFFSET = true;
 
 // UI Elements
 let ui = {
@@ -435,6 +436,7 @@ function renderWebXR(timestamp, frame) {
     const dy = camPos.y - rootPos.y;
     const dz = camPos.z - rootPos.z;
     const mindarPos = (stabilizedPose || lastMindarRelPose) ? (stabilizedPose || lastMindarRelPose).position : null;
+    const stabilizedPos = stabilizedPose ? stabilizedPose.position : null;
     const mindarRawPos = lastMindarRawPose ? lastMindarRawPose.position : null;
     const mindarNormPos = lastMindarNormPose ? lastMindarNormPose.position : null;
     const rootQuatInv = rootQuat.clone().invert();
@@ -462,7 +464,10 @@ function renderWebXR(timestamp, frame) {
         : `scaled: (n/a)\n`) +
       `camL: (${camLocalPos.x.toFixed(3)}, ${camLocalPos.y.toFixed(3)}, ${camLocalPos.z.toFixed(3)})\n` +
       `rot: (${camRot.x.toFixed(1)}, ${camRot.y.toFixed(1)}, ${camRot.z.toFixed(1)})\n` +
-      `root: (${rootPos.x.toFixed(3)}, ${rootPos.y.toFixed(3)}, ${rootPos.z.toFixed(3)})`;
+      `root: (${rootPos.x.toFixed(3)}, ${rootPos.y.toFixed(3)}, ${rootPos.z.toFixed(3)})\n` +
+      (stabilizedPos
+        ? `stb: (${stabilizedPos.x.toFixed(3)}, ${stabilizedPos.y.toFixed(3)}, ${stabilizedPos.z.toFixed(3)})`
+        : `stb: (n/a)`);
   }
   if (currentState === AppState.RUNNING) {
     if (ui.poseInfo) ui.poseInfo.innerText = viewerPose && viewerPose.emulatedPosition ? "SLAM: LOST" : "SLAM: Tracking";
@@ -480,6 +485,7 @@ function lockWorldOrigin(viewerPose) {
   const cameraPosition = new THREE.Vector3().copy(viewerPose.transform.position);
   const cameraQuaternion = new THREE.Quaternion().copy(viewerPose.transform.orientation);
   const offsetPos = stabilizedPose.position.clone();
+  if (INVERT_MARKER_OFFSET) offsetPos.multiplyScalar(-1);
   offsetPos.applyQuaternion(cameraQuaternion);
   if (offsetPos.length() > MAX_MARKER_DISTANCE) {
     offsetPos.setLength(MAX_MARKER_DISTANCE);
