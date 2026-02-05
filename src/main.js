@@ -1,24 +1,366 @@
-import './style.css'
-import javascriptLogo from './javascript.svg'
-import viteLogo from '/vite.svg'
-import { setupCounter } from './counter.js'
+import * as THREE from 'three';
+import { SceneManager } from './SceneManager.js';
 
-document.querySelector('#app').innerHTML = `
-  <div>
-    <a href="https://vite.dev" target="_blank">
-      <img src="${viteLogo}" class="logo" alt="Vite logo" />
-    </a>
-    <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript" target="_blank">
-      <img src="${javascriptLogo}" class="logo vanilla" alt="JavaScript logo" />
-    </a>
-    <h1>Hello Vite!</h1>
-    <div class="card">
-      <button id="counter" type="button"></button>
-    </div>
-    <p class="read-the-docs">
-      Click on the Vite logo to learn more
-    </p>
-  </div>
-`
+// --- Debug & Logger ---
+const debugConsole = document.getElementById('debug-console');
+function log(message) {
+  console.log(`[App] ${message}`);
+  if (debugConsole) {
+    debugConsole.innerText += message + '\n';
+    debugConsole.scrollTop = debugConsole.scrollHeight;
+  }
+}
+function error(message) {
+  console.error(message);
+  if (debugConsole) {
+    debugConsole.innerText += '[ERR] ' + message + '\n';
+  }
+}
 
-setupCounter(document.querySelector('#counter'))
+window.onerror = function (msg, url, lineNo, columnNo, error) {
+  log(`Global Error: ${msg} at line ${lineNo}`);
+  return false;
+};
+
+// --- State Machine ---
+const AppState = {
+  INIT: 'INIT',
+  MINDAR_READY: 'MINDAR_READY',
+  MINDAR_TRACKING: 'MINDAR_TRACKING',
+  POSE_STABILIZING: 'POSE_STABILIZING',
+  WEBXR_STARTING: 'WEBXR_STARTING',
+  WORLD_LOCKING: 'WORLD_LOCKING',
+  RUNNING: 'RUNNING'
+};
+
+let currentState = AppState.INIT;
+
+// --- Globals ---
+let mindarThree = null;
+let webxrRenderer = null;
+let scene = null;
+let camera = null;
+let sceneManager = null;
+let clock = new THREE.Clock();
+
+// MindAR Data
+let mindarAnchor = null;
+let poseBuffer = [];
+const POSE_BUFFER_SIZE = 15; // Frames to average
+let poseStabilizeTimer = null;
+let stabilizedPose = null; // { position: Vector3, quaternion: Quaternion }
+
+// WebXR Data
+let hitTestSource = null;
+let isAnchorPlaced = false;
+
+// --- UI Elements ---
+const ui = {
+  overlay: document.getElementById('overlay'),
+  mindarScanning: document.getElementById('mindar-scanning-ui'),
+  transition: document.getElementById('transition-overlay'),
+  lockProgress: document.getElementById('lock-progress'),
+  loading: document.getElementById('loading-screen'),
+  runtime: document.getElementById('runtime-ui'),
+  arButton: document.getElementById('ar-button'),
+  poseInfo: document.getElementById('pose-info')
+};
+
+// --- Initialization ---
+async function init() {
+  log('State: INIT');
+  if (ui.arButton) {
+    ui.arButton.addEventListener('click', startMindARPhase);
+  } else {
+    error("AR Button not found!");
+  }
+}
+
+// --- Phase 1: MindAR Image Tracking ---
+async function startMindARPhase() {
+  if (ui.overlay) ui.overlay.style.display = 'none';
+  if (ui.mindarScanning) ui.mindarScanning.style.display = 'block';
+  currentState = AppState.MINDAR_READY;
+
+  log('Starting MindAR...');
+
+  // Initialize MindAR Three
+  // Note: We create a temporary renderer for MindAR
+  try {
+    mindarThree = new window.MINDAR.IMAGE.MindARThree({
+      container: document.body,
+      imageTargetSrc: '/targets.mind', // Assumed file in public/
+      filterMinCF: 0.0001, // Reduce jitter
+      filterBeta: 0.001
+    });
+  } catch (e) {
+    error("MindAR Init Failed. Check if mind-ar script is loaded.");
+    return;
+  }
+
+  const { renderer, scene: mScene, camera: mCamera } = mindarThree;
+
+  // Setup light for MindAR scene
+  const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+  mScene.add(light);
+
+  // Anchor
+  mindarAnchor = mindarThree.addAnchor(0);
+
+  // Visual helper on the anchor
+  const geometry = new THREE.SphereGeometry(0.1, 32, 32);
+  const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
+  const sphere = new THREE.Mesh(geometry, material);
+  mindarAnchor.group.add(sphere);
+
+  // Events
+  mindarAnchor.onTargetFound = () => {
+    if (currentState === AppState.MINDAR_READY) {
+      log('Target Found! Stabilizing...');
+      currentState = AppState.MINDAR_TRACKING;
+      beginPoseStabilization();
+    }
+  };
+
+  mindarAnchor.onTargetLost = () => {
+    if (currentState === AppState.MINDAR_TRACKING || currentState === AppState.POSE_STABILIZING) {
+      log('Target Lost - Abort Transition');
+      cancelPoseStabilization();
+      currentState = AppState.MINDAR_READY;
+      if (ui.transition) ui.transition.style.display = 'none';
+    }
+  };
+
+  // Start MindAR
+  try {
+    await mindarThree.start();
+    renderer.setAnimationLoop(() => {
+      if (currentState === AppState.MINDAR_TRACKING || currentState === AppState.POSE_STABILIZING) {
+        if (currentState === AppState.POSE_STABILIZING) {
+          bufferPose(mindarAnchor.group);
+        }
+      }
+      renderer.render(mScene, mCamera);
+    });
+  } catch (e) {
+    error("MindAR Start Failed: " + e);
+    alert("Could not start Camera. Please ensure 'targets.mind' exists and camera permission is granted.");
+  }
+}
+
+// --- Phase 2: Pose Stabilization (Critical Section) ---
+function beginPoseStabilization() {
+  currentState = AppState.POSE_STABILIZING;
+  if (ui.mindarScanning) ui.mindarScanning.style.display = 'none';
+  if (ui.transition) ui.transition.style.display = 'flex';
+  if (ui.lockProgress) ui.lockProgress.style.width = '0%';
+
+  poseBuffer = [];
+
+  let progress = 0;
+  const duration = 1500; // 1.5s lock time
+  const interval = 50;
+
+  poseStabilizeTimer = setInterval(() => {
+    progress += (interval / duration) * 100;
+    if (ui.lockProgress) ui.lockProgress.style.width = Math.min(progress, 100) + '%';
+
+    if (progress >= 100) {
+      clearInterval(poseStabilizeTimer);
+      finalizeStabilization();
+    }
+  }, interval);
+}
+
+function cancelPoseStabilization() {
+  clearInterval(poseStabilizeTimer);
+  if (ui.lockProgress) ui.lockProgress.style.width = '0%';
+  if (ui.transition) ui.transition.style.display = 'none';
+  if (ui.mindarScanning) ui.mindarScanning.style.display = 'block';
+}
+
+function bufferPose(group) {
+  poseBuffer.push({
+    position: group.position.clone(),
+    quaternion: group.quaternion.clone()
+  });
+}
+
+function finalizeStabilization() {
+  log('Stabilization Complete. Calculating Average Pose...');
+
+  if (poseBuffer.length === 0) {
+    error("No poses buffered!");
+    cancelPoseStabilization();
+    return;
+  }
+
+  // Average Position
+  const avgPos = new THREE.Vector3();
+  poseBuffer.forEach(p => avgPos.add(p.position));
+  avgPos.divideScalar(poseBuffer.length);
+
+  // Average Quaternion
+  let avgQuat = poseBuffer[0].quaternion.clone();
+  for (let i = 1; i < poseBuffer.length; i++) {
+    avgQuat.slerp(poseBuffer[i].quaternion, 1 / (i + 1));
+  }
+
+  stabilizedPose = {
+    position: avgPos,
+    quaternion: avgQuat
+  };
+
+  log(`Stabilized Pose: ${JSON.stringify(stabilizedPose.position)}`);
+
+  transitionToWebXR();
+}
+
+// --- Phase 3: Transition to WebXR ---
+async function transitionToWebXR() {
+  currentState = AppState.WEBXR_STARTING;
+
+  log('Stopping MindAR...');
+  mindarThree.stop();
+  mindarThree.renderer.setAnimationLoop(null);
+  mindarThree.renderer.dispose();
+
+  // Remove MindAR video/canvas from DOM
+  const video = document.querySelector('video');
+  if (video) video.remove();
+  const canvas = document.querySelector('canvas');
+  if (canvas) canvas.remove();
+
+  log('Starting WebXR Session...');
+  startWebXRSession();
+}
+
+async function startWebXRSession() {
+  if (!navigator.xr) {
+    alert("WebXR not supported");
+    return;
+  }
+
+  try {
+    const session = await navigator.xr.requestSession('immersive-ar', {
+      requiredFeatures: ['local', 'hit-test'],
+      optionalFeatures: ['dom-overlay'],
+      domOverlay: { root: document.body }
+    });
+
+    setupWebXRScene(session);
+
+  } catch (e) {
+    error("WebXR Start Failed: " + e);
+    location.reload();
+  }
+}
+
+function setupWebXRScene(session) {
+  // Create new Renderer/Scene for WebXR
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+  // Lighting
+  const hemiLight = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+  hemiLight.position.set(0.5, 1, 0.25);
+  scene.add(hemiLight);
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+  dirLight.position.set(0, 10, 0);
+  scene.add(dirLight);
+
+  webxrRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  webxrRenderer.setPixelRatio(window.devicePixelRatio);
+  webxrRenderer.setSize(window.innerWidth, window.innerHeight);
+  webxrRenderer.xr.enabled = true;
+  webxrRenderer.xr.setReferenceSpaceType('local');
+  document.body.appendChild(webxrRenderer.domElement);
+
+  // Scene Manager (Content)
+  sceneManager = new SceneManager(scene, camera, log);
+  sceneManager.loadSceneConfig('/scene.json'); // Load assets
+  sceneManager.worldRoot.visible = false;
+
+  // Setup Session
+  webxrRenderer.xr.setSession(session);
+
+  // Wait for "Tracking" state
+  currentState = AppState.WORLD_LOCKING;
+
+  session.addEventListener('end', () => {
+    location.reload();
+  });
+
+  webxrRenderer.setAnimationLoop(renderWebXR);
+}
+
+// --- Phase 4 & 5: World Locking & Running ---
+let stableFramesCount = 0;
+
+function renderWebXR(timestamp, frame) {
+  const delta = clock.getDelta();
+  sceneManager.update(delta);
+
+  if (!frame) return;
+
+  const viewerPose = frame.getViewerPose(webxrRenderer.xr.getReferenceSpace());
+
+  if (currentState === AppState.WORLD_LOCKING) {
+    if (!viewerPose) return;
+
+    // Wait for a few stable frames
+    if (!viewerPose.emulatedPosition) {
+      stableFramesCount++;
+    } else {
+      stableFramesCount = 0;
+    }
+
+    if (stableFramesCount > 10) {
+      lockWorldOrigin(viewerPose);
+    }
+  }
+
+  if (currentState === AppState.RUNNING) {
+    // SLAM Status Update
+    if (ui.poseInfo) {
+      ui.poseInfo.innerText = viewerPose && viewerPose.emulatedPosition ? "SLAM: LOST" : "SLAM: Tracking";
+    }
+  }
+
+  webxrRenderer.render(scene, camera);
+}
+
+function lockWorldOrigin(viewerPose) {
+  log('Locking World Origin...');
+
+  const cameraPosition = new THREE.Vector3().copy(viewerPose.transform.position);
+  const cameraQuaternion = new THREE.Quaternion().copy(viewerPose.transform.orientation);
+
+  // Marker Position in World = CameraPos + (CameraRot * MindAROffset)
+  const offsetPos = stabilizedPose.position.clone();
+  offsetPos.applyQuaternion(cameraQuaternion);
+  const markerWorldPos = cameraPosition.clone().add(offsetPos);
+
+  // Marker Rotation = CameraRot * MindARRot
+  const markerWorldRot = cameraQuaternion.clone().multiply(stabilizedPose.quaternion);
+
+  // Set Scene Root - MindAR Image Target is usually "Vertical" if it's a poster?
+  // MindAR coordinates: Z is coming out of image. X is right. Y is up.
+  // If the image is on a wall, MindAR Y is World Up.
+  // We trust MindAR's orientation relative to camera.
+
+  sceneManager.worldRoot.position.copy(markerWorldPos);
+  sceneManager.worldRoot.quaternion.copy(markerWorldRot);
+  sceneManager.worldRoot.visible = true;
+
+  // Transition UI Done
+  if (ui.transition) ui.transition.style.display = 'none';
+  if (ui.runtime) ui.runtime.style.display = 'block';
+  currentState = AppState.RUNNING;
+  log('Transition Complete. Enjoy!');
+
+  stabilizedPose = null;
+  poseBuffer = null;
+}
+
+init();
