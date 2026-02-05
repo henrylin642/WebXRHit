@@ -140,7 +140,6 @@ async function startMindARPhase() {
     renderer.setAnimationLoop(() => {
       if (currentState === AppState.MINDAR_TRACKING || currentState === AppState.POSE_STABILIZING) {
         if (currentState === AppState.POSE_STABILIZING) {
-          // IMPORTANT: Pass camera to bufferPose
           bufferPose(mindarAnchor.group, mCamera);
         }
       }
@@ -201,7 +200,6 @@ function bufferPose(group, camera) {
   camera.getWorldQuaternion(camQuat);
 
   // Calculate Target Pose in CAMERA SPACE
-  // This removes the dependency on how MindAR manages the world (Target moving vs Camera moving)
   const relPos = groupPos.clone().sub(camPos).applyQuaternion(camQuat.clone().invert());
   const relQuat = camQuat.clone().invert().multiply(groupQuat);
 
@@ -348,19 +346,26 @@ function lockWorldOrigin(viewerPose) {
   const cameraQuaternion = new THREE.Quaternion().copy(viewerPose.transform.orientation);
 
   // 1. Calculate the Marker's Position in WebXR Space
-  // offsetPos is the vector "Camera -> Marker" in Camera Space
-  // So we rotate it by Camera Rotation to get World Vector
   const offsetPos = stabilizedPose.position.clone();
   offsetPos.applyQuaternion(cameraQuaternion);
-  const markerWorldPos = cameraPosition.clone().add(offsetPos);
 
-  // 2. Calculate the Marker's Rotation in WebXR Space
-  // Marker Rot = Camera Rot * Local Rot
+  let markerWorldPos = cameraPosition.clone().add(offsetPos);
+
+  // Log for Debugging
+  log(`Raw Marker Pos: ${markerWorldPos.x.toFixed(2)}, ${markerWorldPos.y.toFixed(2)}, ${markerWorldPos.z.toFixed(2)}`);
+
+  // --- Sanity Check --- 
+  // If calculating > 10m away, reset to 1m front
+  if (markerWorldPos.distanceTo(cameraPosition) > 10) {
+    log("Warning: Marker Too Far! Resetting to 1m front.");
+    const front = new THREE.Vector3(0, 0, -1).applyQuaternion(cameraQuaternion);
+    markerWorldPos = cameraPosition.clone().add(front);
+  }
+
+  // 2. Calculate the Marker's Rotation
   const markerWorldRot = cameraQuaternion.clone().multiply(stabilizedPose.quaternion);
 
   // 3. Gravity Correction
-  // We want Y-up.
-  // Use the Marker's forward direction to determine yaw, but force Pitch/Roll to zero (align to gravity)
   const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(markerWorldRot);
   forward.y = 0; // Project to floor
   forward.normalize();
