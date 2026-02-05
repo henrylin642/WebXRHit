@@ -19,7 +19,7 @@
             window.libsLoaded.three = true;
             var dbg = document.getElementById('debug-console');
             if (dbg && window.THREE) dbg.innerText += '[Sys] THREE v' + THREE.REVISION + ' Loaded\n';
-            checkReady();
+            if (window.checkReady) window.checkReady();
         }
 
         function markMindARLoaded() {
@@ -31,16 +31,16 @@
             } else {
                 if (dbg) dbg.innerText += '[Sys] MINDAR Object Missing on Load!\n';
             }
-            checkReady();
+            if (window.checkReady) window.checkReady();
         }
 
         function checkReady() {
             if (window.libsLoaded.three && window.libsLoaded.mindar) {
                 var btn = document.getElementById('ar-button');
+                // We leave the enabling to main.js polling to be safe, 
+                // but this visual feedback helps debugging Index level loading
                 if (btn) {
-                    btn.disabled = false;
-                    btn.innerText = "Start Experience";
-                    btn.style.opacity = "1";
+                    btn.innerText = "Initializing...";
                 }
             }
         }
@@ -164,8 +164,8 @@
 
         <div id="debug-console"></div>
     </div>
-    <!-- Load main script as module -->
-    <script type="module" src="/src/main.js"></script>
+    <!-- Load main script as module with cache busting version -->
+    <script type="module" src="/src/main.js?v=2"></script>
 </body>
 
 </html>
