@@ -55,7 +55,7 @@ let stabilizedPose = null;
 // IMPORTANT: Physical width of the marker in meters.
 // MindAR coordinates are in "Image Width units". WebXR is in "Meters".
 // We MUST scale the detailed position by this value.
-const PHYSICAL_MARKER_WIDTH = 0.55; // Default: 55cm
+let PHYSICAL_MARKER_WIDTH = 0.55; // Default: 55cm
 
 // UI Elements
 let ui = {
@@ -66,18 +66,59 @@ let ui = {
   loading: document.getElementById('loading-screen'),
   runtime: document.getElementById('runtime-ui'),
   arButton: document.getElementById('ar-button'),
-  poseInfo: document.getElementById('pose-info')
+  poseInfo: document.getElementById('pose-info'),
+  // Settings UI
+  settingsBtn: document.getElementById('settings-btn'),
+  settingsModal: document.getElementById('settings-modal'),
+  saveSettings: document.getElementById('save-settings'),
+  closeSettings: document.getElementById('close-settings'),
+  widthInput: document.getElementById('marker-width-input')
 };
 
 // --- Initialization ---
 async function init() {
   log('State: INIT (ES Modules)');
 
+  // Load saved setting
+  const savedWidth = localStorage.getItem('markerWidth');
+  if (savedWidth) {
+    PHYSICAL_MARKER_WIDTH = parseFloat(savedWidth);
+    if (ui.widthInput) ui.widthInput.value = PHYSICAL_MARKER_WIDTH;
+    log(`Loaded saved marker width: ${PHYSICAL_MARKER_WIDTH}m`);
+  }
+
   // Dependencies are imported, so they are ready if this script runs
   if (ui.arButton) {
     ui.arButton.innerText = "Start Experience";
     ui.arButton.disabled = false;
     ui.arButton.addEventListener('click', startMindARPhase);
+  }
+
+  // Settings Events
+  if (ui.settingsBtn) {
+    ui.settingsBtn.addEventListener('click', () => {
+      if (ui.settingsModal) ui.settingsModal.style.display = 'flex';
+    });
+  }
+
+  if (ui.closeSettings) {
+    ui.closeSettings.addEventListener('click', () => {
+      if (ui.settingsModal) ui.settingsModal.style.display = 'none';
+    });
+  }
+
+  if (ui.saveSettings) {
+    ui.saveSettings.addEventListener('click', () => {
+      const val = parseFloat(ui.widthInput.value);
+      if (val > 0) {
+        PHYSICAL_MARKER_WIDTH = val;
+        localStorage.setItem('markerWidth', val);
+        log(`Updated Marker Width to: ${val}m`);
+        if (ui.settingsModal) ui.settingsModal.style.display = 'none';
+      } else {
+        alert("Invalid width");
+      }
+    });
   }
 }
 
