@@ -413,6 +413,7 @@ function openIframe(url) {
 }
 
 let stableFramesCount = 0;
+let lockWaitFrames = 0;
 function renderWebXR(timestamp, frame) {
   const delta = clock.getDelta();
   sceneManager.update(delta, camera);
@@ -420,9 +421,10 @@ function renderWebXR(timestamp, frame) {
   const viewerPose = frame.getViewerPose(webxrRenderer.xr.getReferenceSpace());
   if (currentState === AppState.WORLD_LOCKING) {
     if (!viewerPose) return;
+    lockWaitFrames++;
     if (!viewerPose.emulatedPosition) stableFramesCount++;
     else stableFramesCount = 0;
-    if (stableFramesCount > 10) lockWorldOrigin(viewerPose);
+    if (stableFramesCount > 10 || lockWaitFrames > 60) lockWorldOrigin(viewerPose);
   }
   if (viewerPose && ui.cameraPose) {
     const camPos = viewerPose.transform.position;
@@ -474,6 +476,7 @@ function lockWorldOrigin(viewerPose) {
     error("No stabilized pose; cannot lock world origin.");
     return;
   }
+  lockWaitFrames = 0;
   const cameraPosition = new THREE.Vector3().copy(viewerPose.transform.position);
   const cameraQuaternion = new THREE.Quaternion().copy(viewerPose.transform.orientation);
   const offsetPos = stabilizedPose.position.clone();
