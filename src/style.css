@@ -181,7 +181,7 @@ button:active {
 #camera-pose {
   position: absolute;
   bottom: 190px;
-  left: 20px;
+  right: 20px;
   color: #00ff00;
   font-family: monospace;
   font-size: 10px;

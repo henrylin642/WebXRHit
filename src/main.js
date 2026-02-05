@@ -426,6 +426,7 @@ function renderWebXR(timestamp, frame) {
   }
   if (viewerPose && ui.cameraPose) {
     const camPos = viewerPose.transform.position;
+    const camQuat = viewerPose.transform.orientation;
     const rootPos = sceneManager.worldRoot.position;
     const dx = camPos.x - rootPos.x;
     const dy = camPos.y - rootPos.y;
@@ -433,6 +434,17 @@ function renderWebXR(timestamp, frame) {
     const mindarPos = (stabilizedPose || lastMindarRelPose) ? (stabilizedPose || lastMindarRelPose).position : null;
     const mindarRawPos = lastMindarRawPose ? lastMindarRawPose.position : null;
     const mindarNormPos = lastMindarNormPose ? lastMindarNormPose.position : null;
+    const rootQuatInv = sceneManager.worldRoot.quaternion.clone().invert();
+    const camLocalPos = new THREE.Vector3(camPos.x, camPos.y, camPos.z)
+      .sub(rootPos)
+      .applyQuaternion(rootQuatInv);
+    const camLocalQuat = rootQuatInv.clone().multiply(new THREE.Quaternion(camQuat.x, camQuat.y, camQuat.z, camQuat.w));
+    const camEuler = new THREE.Euler().setFromQuaternion(camLocalQuat, 'YXZ');
+    const camRot = {
+      x: THREE.MathUtils.radToDeg(camEuler.x),
+      y: THREE.MathUtils.radToDeg(camEuler.y),
+      z: THREE.MathUtils.radToDeg(camEuler.z)
+    };
     ui.cameraPose.innerText =
       `cam: (${camPos.x.toFixed(3)}, ${camPos.y.toFixed(3)}, ${camPos.z.toFixed(3)})\n` +
       `dxyz: (${dx.toFixed(3)}, ${dy.toFixed(3)}, ${dz.toFixed(3)})\n` +
@@ -443,8 +455,10 @@ function renderWebXR(timestamp, frame) {
         ? `norm: (${mindarNormPos.x.toFixed(3)}, ${mindarNormPos.y.toFixed(3)}, ${mindarNormPos.z.toFixed(3)})\n`
         : `norm: (n/a)\n`) +
       (mindarPos
-        ? `scaled: (${mindarPos.x.toFixed(3)}, ${mindarPos.y.toFixed(3)}, ${mindarPos.z.toFixed(3)})`
-        : `scaled: (n/a)`);
+        ? `scaled: (${mindarPos.x.toFixed(3)}, ${mindarPos.y.toFixed(3)}, ${mindarPos.z.toFixed(3)})\n`
+        : `scaled: (n/a)\n`) +
+      `camL: (${camLocalPos.x.toFixed(3)}, ${camLocalPos.y.toFixed(3)}, ${camLocalPos.z.toFixed(3)})\n` +
+      `rot: (${camRot.x.toFixed(1)}, ${camRot.y.toFixed(1)}, ${camRot.z.toFixed(1)})`;
   }
   if (currentState === AppState.RUNNING) {
     if (ui.poseInfo) ui.poseInfo.innerText = viewerPose && viewerPose.emulatedPosition ? "SLAM: LOST" : "SLAM: Tracking";
