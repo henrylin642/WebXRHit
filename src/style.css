@@ -33,6 +33,78 @@ body {
   pointer-events: auto;
 }
 
+/* MindAR Scanning UI */
+#mindar-scanning-ui {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.scan-instructions {
+  position: absolute;
+  top: 20px;
+  width: 100%;
+  text-align: center;
+  color: white;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 10px;
+}
+
+.scan-title {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.scan-frame {
+  position: absolute;
+  top: 25%;
+  left: 50%;
+  width: 60vw;
+  height: 60vw;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  transform: translate(-50%, -50%);
+  border-radius: 10px;
+}
+
+.scan-corner {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+}
+
+.scan-corner.tl {
+  top: -2px;
+  left: -2px;
+  border-top: 4px solid #00ff88;
+  border-left: 4px solid #00ff88;
+}
+
+.scan-corner.tr {
+  top: -2px;
+  right: -2px;
+  border-top: 4px solid #00ff88;
+  border-right: 4px solid #00ff88;
+}
+
+.scan-corner.bl {
+  bottom: -2px;
+  left: -2px;
+  border-bottom: 4px solid #00ff88;
+  border-left: 4px solid #00ff88;
+}
+
+.scan-corner.br {
+  bottom: -2px;
+  right: -2px;
+  border-bottom: 4px solid #00ff88;
+  border-right: 4px solid #00ff88;
+}
+
 /* UI Components */
 button {
   background: rgba(0, 0, 0, 0.6);
@@ -102,9 +174,77 @@ button:active {
   padding: 4px;
 }
 
+#settings-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  font-size: 22px;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(6px);
+  z-index: 10001;
+}
+
+#settings-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 10000;
+}
+
+.settings-card {
+  background: rgba(15, 15, 15, 0.9);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 16px;
+  min-width: 260px;
+  max-width: 80vw;
+}
+
+.settings-title {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 12px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.settings-row input {
+  width: 100px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.4);
+  color: white;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 #debug-console {
   position: absolute;
-  top: 60px;
+  bottom: 10px;
   left: 10px;
   right: 10px;
   height: 120px;
