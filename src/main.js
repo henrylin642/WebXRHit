@@ -53,6 +53,8 @@ let poseStabilizeTimer = null;
 let stabilizedPose = null;
 let lastMindarRelPose = null;
 let lastMindarRawPose = null;
+let lastMindarNormPose = null;
+let lastVideoSize = { width: 0, height: 0 };
 
 // IMPORTANT: Physical width of the marker in meters.
 let PHYSICAL_MARKER_WIDTH = 0.55;
@@ -60,6 +62,7 @@ const MAX_MARKER_DISTANCE = 5;
 let webxrSessionStarting = false;
 const USE_GRAVITY_ALIGN = true;
 const FLIP_MARKER_Z = true;
+const AUTO_NORMALIZE_BY_VIDEO = true;
 
 // UI Elements
 let ui = {
@@ -204,6 +207,15 @@ async function startMindARPhase() {
   try {
     log("Starting MindAR Video...");
     await mindarThree.start();
+    const video = document.querySelector('video');
+    if (video) {
+      const updateVideoSize = () => {
+        lastVideoSize.width = video.videoWidth || 0;
+        lastVideoSize.height = video.videoHeight || 0;
+      };
+      updateVideoSize();
+      video.addEventListener('loadedmetadata', updateVideoSize);
+    }
     renderer.setAnimationLoop(() => {
       if (currentState === AppState.MINDAR_TRACKING || currentState === AppState.POSE_STABILIZING) {
         if (currentState === AppState.POSE_STABILIZING) {
@@ -259,17 +271,29 @@ function bufferPose(group, camera) {
   group.matrix.decompose(relPos, relQuat, new THREE.Vector3());
   if (FLIP_MARKER_Z) relPos.z *= -1;
   lastMindarRawPose = { position: relPos.clone(), quaternion: relQuat.clone() };
-  relPos.multiplyScalar(PHYSICAL_MARKER_WIDTH);
-  lastMindarRelPose = { position: relPos.clone(), quaternion: relQuat.clone() };
-  poseBuffer.push({ position: relPos, quaternion: relQuat });
+  let normPos = relPos.clone();
+  if (AUTO_NORMALIZE_BY_VIDEO && lastVideoSize.height > 0 && normPos.length() > 10) {
+    normPos.multiplyScalar(1 / lastVideoSize.height);
+  }
+  lastMindarNormPose = { position: normPos.clone(), quaternion: relQuat.clone() };
+  normPos.multiplyScalar(PHYSICAL_MARKER_WIDTH);
+  const scaledPos = normPos.clone();
+  lastMindarRelPose = { position: scaledPos.clone(), quaternion: relQuat.clone() };
+  poseBuffer.push({ position: scaledPos, quaternion: relQuat });
 
   if (ui.mindarPose) {
-    const dx = relPos.x;
-    const dy = relPos.y;
-    const dz = relPos.z;
+    const dx = scaledPos.x;
+    const dy = scaledPos.y;
+    const dz = scaledPos.z;
+    const euler = new THREE.Euler().setFromQuaternion(relQuat, 'YXZ');
+    const degX = THREE.MathUtils.radToDeg(euler.x);
+    const degY = THREE.MathUtils.radToDeg(euler.y);
+    const degZ = THREE.MathUtils.radToDeg(euler.z);
     ui.mindarPose.innerText =
-      `mindar: (${relPos.x.toFixed(3)}, ${relPos.y.toFixed(3)}, ${relPos.z.toFixed(3)})\n` +
-      `dxyz: (${dx.toFixed(3)}, ${dy.toFixed(3)}, ${dz.toFixed(3)})`;
+      `mindar: (${scaledPos.x.toFixed(3)}, ${scaledPos.y.toFixed(3)}, ${scaledPos.z.toFixed(3)})\n` +
+      `dxyz: (${dx.toFixed(3)}, ${dy.toFixed(3)}, ${dz.toFixed(3)})\n` +
+      `rot: (${degX.toFixed(1)}, ${degY.toFixed(1)}, ${degZ.toFixed(1)})\n` +
+      `video: (${lastVideoSize.width}x${lastVideoSize.height})`;
   }
 }
 
@@ -406,12 +430,16 @@ function renderWebXR(timestamp, frame) {
     const dz = camPos.z - rootPos.z;
     const mindarPos = (stabilizedPose || lastMindarRelPose) ? (stabilizedPose || lastMindarRelPose).position : null;
     const mindarRawPos = lastMindarRawPose ? lastMindarRawPose.position : null;
+    const mindarNormPos = lastMindarNormPose ? lastMindarNormPose.position : null;
     ui.cameraPose.innerText =
       `cam: (${camPos.x.toFixed(3)}, ${camPos.y.toFixed(3)}, ${camPos.z.toFixed(3)})\n` +
       `dxyz: (${dx.toFixed(3)}, ${dy.toFixed(3)}, ${dz.toFixed(3)})\n` +
       (mindarRawPos
         ? `raw: (${mindarRawPos.x.toFixed(3)}, ${mindarRawPos.y.toFixed(3)}, ${mindarRawPos.z.toFixed(3)})\n`
         : `raw: (n/a)\n`) +
+      (mindarNormPos
+        ? `norm: (${mindarNormPos.x.toFixed(3)}, ${mindarNormPos.y.toFixed(3)}, ${mindarNormPos.z.toFixed(3)})\n`
+        : `norm: (n/a)\n`) +
       (mindarPos
         ? `scaled: (${mindarPos.x.toFixed(3)}, ${mindarPos.y.toFixed(3)}, ${mindarPos.z.toFixed(3)})`
         : `scaled: (n/a)`);
