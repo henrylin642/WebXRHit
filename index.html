@@ -8,25 +8,55 @@
     <link rel="stylesheet" href="/src/style.css" />
 
     <script>
-        // Global Error Handler
+        // Global Error Handler & Lib Check
+        window.libsLoaded = { three: false, mindar: false };
         window.addEventListener('error', function (e) {
-            var consoleDiv = document.getElementById('debug-console');
-            if (consoleDiv) {
-                consoleDiv.innerText += '[Global Error] ' + e.message + '\n';
-            }
+            var dbg = document.getElementById('debug-console');
+            if (dbg) dbg.innerText += '[Global Err] ' + e.message + '\n';
         });
+
+        function markThreeLoaded() {
+            window.libsLoaded.three = true;
+            var dbg = document.getElementById('debug-console');
+            if (dbg && window.THREE) dbg.innerText += '[Sys] THREE v' + THREE.REVISION + ' Loaded\n';
+            checkReady();
+        }
+
+        function markMindARLoaded() {
+            window.libsLoaded.mindar = true;
+            var dbg = document.getElementById('debug-console');
+            if (dbg) dbg.innerText += '[Sys] MindAR Script Loaded\n';
+            if (window.MINDAR) {
+                if (dbg) dbg.innerText += '[Sys] MINDAR Object Found\n';
+            } else {
+                if (dbg) dbg.innerText += '[Sys] MINDAR Object Missing on Load!\n';
+            }
+            checkReady();
+        }
+
+        function checkReady() {
+            if (window.libsLoaded.three && window.libsLoaded.mindar) {
+                var btn = document.getElementById('ar-button');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerText = "Start Experience";
+                    btn.style.opacity = "1";
+                }
+            }
+        }
     </script>
 
-    <!-- Three.js (r147) -->
-    <script src="https://unpkg.com/three@0.147.0/build/three.min.js"
+    <!-- Three.js (r147) from JSDELIVR (More stable than UNPKG) -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js" onload="markThreeLoaded()"
         onerror="document.getElementById('debug-console').innerText += '[Load Error] Three.js Failed\n'"></script>
 
     <!-- GLTFLoader (r147) -->
-    <script src="https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js"
+    <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"
+        onload="document.getElementById('debug-console').innerText += '[Sys] GLTFLoader Loaded\n'"
         onerror="document.getElementById('debug-console').innerText += '[Load Error] GLTFLoader Failed\n'"></script>
 
-    <!-- MindAR Adapter (Using UNPKG) -->
-    <script src="https://unpkg.com/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+    <!-- MindAR Adapter -->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js" onload="markMindARLoaded()"
         onerror="document.getElementById('debug-console').innerText += '[Load Error] MindAR Failed\n'"></script>
 </head>
 
@@ -35,7 +65,7 @@
 
         <!-- Initial Start / Overlay -->
         <div id="overlay">
-            <button id="ar-button">Start Experience</button>
+            <button id="ar-button" disabled style="opacity: 0.5;">Loading Libraries...</button>
         </div>
 
         <!-- MindAR Scanning UI -->
@@ -134,7 +164,7 @@
 
         <div id="debug-console"></div>
     </div>
-    <!-- Load main script as module, but verify standard scripts loaded first -->
+    <!-- Load main script as module -->
     <script type="module" src="/src/main.js"></script>
 </body>
 
