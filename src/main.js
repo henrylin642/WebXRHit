@@ -53,9 +53,7 @@ let poseStabilizeTimer = null;
 let stabilizedPose = null;
 
 // IMPORTANT: Physical width of the marker in meters.
-// MindAR coordinates are in "Image Width units". WebXR is in "Meters".
-// We MUST scale the detailed position by this value.
-let PHYSICAL_MARKER_WIDTH = 0.55; // Default: 55cm
+let PHYSICAL_MARKER_WIDTH = 0.55;
 
 // UI Elements
 let ui = {
@@ -87,7 +85,6 @@ async function init() {
     log(`Loaded saved marker width: ${PHYSICAL_MARKER_WIDTH}m`);
   }
 
-  // Dependencies are imported, so they are ready if this script runs
   if (ui.arButton) {
     ui.arButton.innerText = "Start Experience";
     ui.arButton.disabled = false;
@@ -120,6 +117,12 @@ async function init() {
       }
     });
   }
+
+  // Exit Button logic
+  const exitBtn = document.getElementById('exit-ar-btn');
+  if (exitBtn) {
+    exitBtn.addEventListener('click', () => location.reload());
+  }
 }
 
 // --- Phase 1: MindAR Image Tracking ---
@@ -130,7 +133,6 @@ async function startMindARPhase() {
 
   log('Starting MindAR Setup...');
 
-  // Initialize MindAR Three
   try {
     log("Creating MindARThree instance...");
     mindarThree = new MindARThree({
@@ -149,11 +151,9 @@ async function startMindARPhase() {
 
   const { renderer, scene: mScene, camera: mCamera } = mindarThree;
 
-  // Setup light
   const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
   mScene.add(light);
 
-  // Anchor
   mindarAnchor = mindarThree.addAnchor(0);
 
   const geometry = new THREE.SphereGeometry(0.1, 32, 32);
@@ -161,7 +161,6 @@ async function startMindARPhase() {
   const sphere = new THREE.Mesh(geometry, material);
   mindarAnchor.group.add(sphere);
 
-  // Events
   mindarAnchor.onTargetFound = () => {
     if (currentState === AppState.MINDAR_READY) {
       log('Target Found! Stabilizing...');
@@ -179,7 +178,6 @@ async function startMindARPhase() {
     }
   };
 
-  // Start MindAR
   try {
     log("Starting MindAR Video...");
     await mindarThree.start();
@@ -230,74 +228,51 @@ function cancelPoseStabilization() {
 
 function bufferPose(group, camera) {
   if (!camera) return;
-
-  // Use world matrices for accuracy
   group.updateWorldMatrix(true, false);
   camera.updateWorldMatrix(true, false);
-
   const groupPos = new THREE.Vector3();
   const groupQuat = new THREE.Quaternion();
   group.getWorldPosition(groupPos);
   group.getWorldQuaternion(groupQuat);
-
   const camPos = new THREE.Vector3();
   const camQuat = new THREE.Quaternion();
   camera.getWorldPosition(camPos);
   camera.getWorldQuaternion(camQuat);
-
-  // Calculate Target Pose in CAMERA SPACE
   const relPos = groupPos.clone().sub(camPos).applyQuaternion(camQuat.clone().invert());
-  // SCALE the position by physical marker width
   relPos.multiplyScalar(PHYSICAL_MARKER_WIDTH);
-
   const relQuat = camQuat.clone().invert().multiply(groupQuat);
-
-  poseBuffer.push({
-    position: relPos,
-    quaternion: relQuat
-  });
+  poseBuffer.push({ position: relPos, quaternion: relQuat });
 }
 
 function finalizeStabilization() {
   log('Stabilization Complete.');
-
   if (poseBuffer.length === 0) {
     error("No poses buffered!");
     cancelPoseStabilization();
     return;
   }
-
   const avgPos = new THREE.Vector3();
   poseBuffer.forEach(p => avgPos.add(p.position));
   avgPos.divideScalar(poseBuffer.length);
-
   let avgQuat = poseBuffer[0].quaternion.clone();
   for (let i = 1; i < poseBuffer.length; i++) {
     avgQuat.slerp(poseBuffer[i].quaternion, 1 / (i + 1));
   }
-
-  stabilizedPose = {
-    position: avgPos,
-    quaternion: avgQuat
-  };
-
+  stabilizedPose = { position: avgPos, quaternion: avgQuat };
   transitionToWebXR();
 }
 
 // --- Phase 3: Transition to WebXR ---
 async function transitionToWebXR() {
   currentState = AppState.WEBXR_STARTING;
-
   log('Stopping MindAR for WebXR...');
   mindarThree.stop();
   mindarThree.renderer.setAnimationLoop(null);
   mindarThree.renderer.dispose();
-
   const video = document.querySelector('video');
   if (video) video.remove();
   const canvas = document.querySelector('canvas');
   if (canvas) canvas.remove();
-
   startWebXRSession();
 }
 
@@ -306,16 +281,13 @@ async function startWebXRSession() {
     alert("WebXR not supported");
     return;
   }
-
   try {
     const session = await navigator.xr.requestSession('immersive-ar', {
       requiredFeatures: ['local', 'hit-test'],
       optionalFeatures: ['dom-overlay'],
       domOverlay: { root: document.body }
     });
-
     setupWebXRScene(session);
-
   } catch (e) {
     error("WebXR Start Failed: " + e);
     location.reload();
@@ -346,95 +318,85 @@ function setupWebXRScene(session) {
 
   webxrRenderer.xr.setSession(session);
 
-  currentState = AppState.WORLD_LOCKING;
-
-  session.addEventListener('end', () => {
-    location.reload();
+  // --- Interaction ---
+  const controller = webxrRenderer.xr.getController(0);
+  controller.addEventListener('select', () => {
+    if (currentState !== AppState.RUNNING) return;
+    const hit = sceneManager.raycast(controller);
+    if (hit) {
+      log(`Hit: ${hit.userData.name}`);
+      if (hit.userData.url) openIframe(hit.userData.url);
+    }
   });
+  scene.add(controller);
 
+  const closeIframeBtn = document.getElementById('close-iframe');
+  if (closeIframeBtn) {
+    closeIframeBtn.addEventListener('click', () => {
+      const overlay = document.getElementById('iframe-overlay');
+      if (overlay) overlay.style.display = 'none';
+    });
+  }
+
+  currentState = AppState.WORLD_LOCKING;
+  session.addEventListener('end', () => location.reload());
   webxrRenderer.setAnimationLoop(renderWebXR);
 }
 
-let stableFramesCount = 0;
+function openIframe(url) {
+  const overlay = document.getElementById('iframe-overlay');
+  const iframe = document.getElementById('web-iframe');
+  if (overlay && iframe) {
+    iframe.src = url;
+    overlay.style.display = 'block';
+    log(`Opening: ${url}`);
+  }
+}
 
+let stableFramesCount = 0;
 function renderWebXR(timestamp, frame) {
   const delta = clock.getDelta();
-  sceneManager.update(delta);
-
+  sceneManager.update(delta, camera);
   if (!frame) return;
-
   const viewerPose = frame.getViewerPose(webxrRenderer.xr.getReferenceSpace());
-
   if (currentState === AppState.WORLD_LOCKING) {
     if (!viewerPose) return;
-
-    if (!viewerPose.emulatedPosition) {
-      stableFramesCount++;
-    } else {
-      stableFramesCount = 0;
-    }
-
-    if (stableFramesCount > 10) {
-      lockWorldOrigin(viewerPose);
-    }
+    if (!viewerPose.emulatedPosition) stableFramesCount++;
+    else stableFramesCount = 0;
+    if (stableFramesCount > 10) lockWorldOrigin(viewerPose);
   }
-
   if (currentState === AppState.RUNNING) {
-    if (ui.poseInfo) {
-      ui.poseInfo.innerText = viewerPose && viewerPose.emulatedPosition ? "SLAM: LOST" : "SLAM: Tracking";
-    }
+    if (ui.poseInfo) ui.poseInfo.innerText = viewerPose && viewerPose.emulatedPosition ? "SLAM: LOST" : "SLAM: Tracking";
   }
-
   webxrRenderer.render(scene, camera);
 }
 
 function lockWorldOrigin(viewerPose) {
-  log('Locking World Origin (Gravity Corrected)...');
-
+  log('Locking World Origin...');
   const cameraPosition = new THREE.Vector3().copy(viewerPose.transform.position);
   const cameraQuaternion = new THREE.Quaternion().copy(viewerPose.transform.orientation);
-
-  // 1. Calculate the Marker's Position in WebXR Space
   const offsetPos = stabilizedPose.position.clone();
   offsetPos.applyQuaternion(cameraQuaternion);
-
   let markerWorldPos = cameraPosition.clone().add(offsetPos);
-
-  // Log for Debugging
-  log(`Raw Marker Pos: ${markerWorldPos.x.toFixed(2)}, ${markerWorldPos.y.toFixed(2)}, ${markerWorldPos.z.toFixed(2)}`);
-
-  // --- Sanity Check --- 
-  // If calculating > 10m away, reset to 1m front
   if (markerWorldPos.distanceTo(cameraPosition) > 10) {
-    log("Warning: Marker Too Far! Resetting to 1m front.");
     const front = new THREE.Vector3(0, 0, -1).applyQuaternion(cameraQuaternion);
     markerWorldPos = cameraPosition.clone().add(front);
   }
-
-  // 2. Calculate the Marker's Rotation
   const markerWorldRot = cameraQuaternion.clone().multiply(stabilizedPose.quaternion);
-
-  // 3. Gravity Correction
   const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(markerWorldRot);
-  forward.y = 0; // Project to floor
-  forward.normalize();
-
+  forward.y = 0; forward.normalize();
   const gravityAlignedQuaternion = new THREE.Quaternion();
   const dummyMatrix = new THREE.Matrix4();
   const targetPos = markerWorldPos.clone().add(forward);
   dummyMatrix.lookAt(markerWorldPos, targetPos, new THREE.Vector3(0, 1, 0));
   gravityAlignedQuaternion.setFromRotationMatrix(dummyMatrix);
-
-  // Apply
   sceneManager.worldRoot.position.copy(markerWorldPos);
   sceneManager.worldRoot.quaternion.copy(gravityAlignedQuaternion);
   sceneManager.worldRoot.visible = true;
-
   if (ui.transition) ui.transition.style.display = 'none';
   if (ui.runtime) ui.runtime.style.display = 'block';
   currentState = AppState.RUNNING;
   log('Transition Complete.');
-
   stabilizedPose = null;
   poseBuffer = null;
 }
