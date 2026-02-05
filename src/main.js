@@ -51,6 +51,7 @@ let poseBuffer = [];
 const POSE_BUFFER_SIZE = 15;
 let poseStabilizeTimer = null;
 let stabilizedPose = null;
+let lastMindarRelPose = null;
 
 // IMPORTANT: Physical width of the marker in meters.
 let PHYSICAL_MARKER_WIDTH = 0.55;
@@ -250,18 +251,13 @@ function bufferPose(group, camera) {
   if (!camera) return;
   group.updateWorldMatrix(true, false);
   camera.updateWorldMatrix(true, false);
-  const groupPos = new THREE.Vector3();
-  const groupQuat = new THREE.Quaternion();
-  group.getWorldPosition(groupPos);
-  group.getWorldQuaternion(groupQuat);
-  const camPos = new THREE.Vector3();
-  const camQuat = new THREE.Quaternion();
-  camera.getWorldPosition(camPos);
-  camera.getWorldQuaternion(camQuat);
-  const relPos = groupPos.clone().sub(camPos).applyQuaternion(camQuat.clone().invert());
+  const relMatrix = new THREE.Matrix4().copy(camera.matrixWorld).invert().multiply(group.matrixWorld);
+  const relPos = new THREE.Vector3();
+  const relQuat = new THREE.Quaternion();
+  relMatrix.decompose(relPos, relQuat, new THREE.Vector3());
   if (FLIP_MARKER_Z) relPos.z *= -1;
   relPos.multiplyScalar(PHYSICAL_MARKER_WIDTH);
-  const relQuat = camQuat.clone().invert().multiply(groupQuat);
+  lastMindarRelPose = { position: relPos.clone(), quaternion: relQuat.clone() };
   poseBuffer.push({ position: relPos, quaternion: relQuat });
 }
 
@@ -396,9 +392,13 @@ function renderWebXR(timestamp, frame) {
     const dx = camPos.x - rootPos.x;
     const dy = camPos.y - rootPos.y;
     const dz = camPos.z - rootPos.z;
+    const mindarPos = (stabilizedPose || lastMindarRelPose) ? (stabilizedPose || lastMindarRelPose).position : null;
     ui.cameraPose.innerText =
       `cam: (${camPos.x.toFixed(3)}, ${camPos.y.toFixed(3)}, ${camPos.z.toFixed(3)})\n` +
-      `dxyz: (${dx.toFixed(3)}, ${dy.toFixed(3)}, ${dz.toFixed(3)})`;
+      `dxyz: (${dx.toFixed(3)}, ${dy.toFixed(3)}, ${dz.toFixed(3)})\n` +
+      (mindarPos
+        ? `mindar: (${mindarPos.x.toFixed(3)}, ${mindarPos.y.toFixed(3)}, ${mindarPos.z.toFixed(3)})`
+        : `mindar: (n/a)`);
   }
   if (currentState === AppState.RUNNING) {
     if (ui.poseInfo) ui.poseInfo.innerText = viewerPose && viewerPose.emulatedPosition ? "SLAM: LOST" : "SLAM: Tracking";
