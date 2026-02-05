@@ -56,7 +56,7 @@ let stabilizedPose = null;
 let PHYSICAL_MARKER_WIDTH = 0.55;
 const MAX_MARKER_DISTANCE = 5;
 let webxrSessionStarting = false;
-const USE_GRAVITY_ALIGN = false;
+const USE_GRAVITY_ALIGN = true;
 
 // UI Elements
 let ui = {
@@ -406,14 +406,16 @@ function lockWorldOrigin(viewerPose) {
   const markerWorldRot = cameraQuaternion.clone().multiply(stabilizedPose.quaternion);
   let finalRotation = markerWorldRot;
   if (USE_GRAVITY_ALIGN) {
+    // Yaw-only: keep vertical axis aligned to gravity, align Z to marker normal projected on XZ.
     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(markerWorldRot);
-    forward.y = 0; forward.normalize();
-    const gravityAlignedQuaternion = new THREE.Quaternion();
-    const dummyMatrix = new THREE.Matrix4();
-    const targetPos = markerWorldPos.clone().add(forward);
-    dummyMatrix.lookAt(markerWorldPos, targetPos, new THREE.Vector3(0, 1, 0));
-    gravityAlignedQuaternion.setFromRotationMatrix(dummyMatrix);
-    finalRotation = gravityAlignedQuaternion;
+    forward.y = 0;
+    if (forward.lengthSq() < 1e-6) {
+      forward.set(0, 0, -1);
+    } else {
+      forward.normalize();
+    }
+    const yaw = Math.atan2(forward.x, forward.z);
+    finalRotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0, 'YXZ'));
   }
   sceneManager.worldRoot.position.copy(markerWorldPos);
   sceneManager.worldRoot.quaternion.copy(finalRotation);
