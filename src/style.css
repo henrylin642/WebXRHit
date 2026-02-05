@@ -248,7 +248,7 @@ button:active {
   display: none;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.08);
   z-index: 10000;
 }
 

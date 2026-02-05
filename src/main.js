@@ -56,6 +56,7 @@ let stabilizedPose = null;
 let PHYSICAL_MARKER_WIDTH = 0.55;
 const MAX_MARKER_DISTANCE = 5;
 let webxrSessionStarting = false;
+const USE_GRAVITY_ALIGN = false;
 
 // UI Elements
 let ui = {
@@ -149,6 +150,11 @@ async function startMindARPhase() {
     mindarThree = new MindARThree({
       container: document.body,
       imageTargetSrc: '/targets.mind',
+      video: {
+        facingMode: 'environment',
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
       filterMinCF: 0.0001,
       filterBeta: 0.001,
       uiLoading: 'no',
@@ -161,6 +167,7 @@ async function startMindARPhase() {
   }
 
   const { renderer, scene: mScene, camera: mCamera } = mindarThree;
+  renderer.setPixelRatio(window.devicePixelRatio);
 
   const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
   mScene.add(light);
@@ -397,15 +404,19 @@ function lockWorldOrigin(viewerPose) {
   }
   const markerWorldPos = cameraPosition.clone().add(offsetPos);
   const markerWorldRot = cameraQuaternion.clone().multiply(stabilizedPose.quaternion);
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(markerWorldRot);
-  forward.y = 0; forward.normalize();
-  const gravityAlignedQuaternion = new THREE.Quaternion();
-  const dummyMatrix = new THREE.Matrix4();
-  const targetPos = markerWorldPos.clone().add(forward);
-  dummyMatrix.lookAt(markerWorldPos, targetPos, new THREE.Vector3(0, 1, 0));
-  gravityAlignedQuaternion.setFromRotationMatrix(dummyMatrix);
+  let finalRotation = markerWorldRot;
+  if (USE_GRAVITY_ALIGN) {
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(markerWorldRot);
+    forward.y = 0; forward.normalize();
+    const gravityAlignedQuaternion = new THREE.Quaternion();
+    const dummyMatrix = new THREE.Matrix4();
+    const targetPos = markerWorldPos.clone().add(forward);
+    dummyMatrix.lookAt(markerWorldPos, targetPos, new THREE.Vector3(0, 1, 0));
+    gravityAlignedQuaternion.setFromRotationMatrix(dummyMatrix);
+    finalRotation = gravityAlignedQuaternion;
+  }
   sceneManager.worldRoot.position.copy(markerWorldPos);
-  sceneManager.worldRoot.quaternion.copy(gravityAlignedQuaternion);
+  sceneManager.worldRoot.quaternion.copy(finalRotation);
   sceneManager.worldRoot.visible = true;
   if (ui.transition) ui.transition.style.display = 'none';
   if (ui.runtime) ui.runtime.style.display = 'block';
