@@ -1,5 +1,7 @@
-import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+// REMOVE IMPORT: import * as THREE from 'three';
+// USE GLOBAL THREE INSTEAD
+// GLTFLoader is also global: THREE.GLTFLoader
+const THREE = window.THREE;
 
 export class SceneManager {
     constructor(scene, camera, logger) {
@@ -32,8 +34,9 @@ export class SceneManager {
     }
 
     addTestCube() {
-        const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-        const material = new THREE.MeshNormalMaterial();
+        // Red Cube for debugging visibility
+        const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+        const material = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
         const cube = new THREE.Mesh(geometry, material);
         this.worldRoot.add(cube);
     }
@@ -41,7 +44,13 @@ export class SceneManager {
     buildSceneFromConfig(config) {
         if (!config.objects) return;
 
-        const loader = new GLTFLoader();
+        // Use global GLTFLoader attached to THREE namespace
+        if (!THREE.GLTFLoader) {
+            this.log("Error: THREE.GLTFLoader not found!");
+            return;
+        }
+
+        const loader = new THREE.GLTFLoader();
 
         config.objects.forEach(objData => {
             if (objData.type === 'model') {
@@ -99,11 +108,6 @@ export class SceneManager {
     }
 
     raycast(controller) {
-        // Controller is a generic XR controller Group
-        // We raycast from controller position in direction of controller forward
-        // But WebXR Controller 'select' event handles imply pointing.
-        // We use the matrixWorld of the controller to get origin/direction.
-
         const tempMatrix = new THREE.Matrix4();
         tempMatrix.identity().extractRotation(controller.matrixWorld);
 
@@ -123,6 +127,5 @@ export class SceneManager {
 
     triggerEvent(layoutId, value) {
         this.log(`Trigger event for ${layoutId}: ${value}`);
-        // Handle interactions, e.g. play sound, show info
     }
 }

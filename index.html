@@ -6,9 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MindAR to WebXR Transition</title>
     <link rel="stylesheet" href="/src/style.css" />
-    <!-- Three.js (Required by MindAR, use r147 for compatibility) -->
+
+    <!-- Three.js (r147) - Global Variable for MindAR compatibility -->
     <script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
-    <!-- MindAR Adapter for Three.js -->
+
+    <!-- GLTFLoader (r147) - Non-module version adds to THREE.GLTFLoader -->
+    <script src="https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+
+    <!-- MindAR Adapter -->
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"></script>
 </head>
 
@@ -47,7 +52,6 @@
         </div>
 
         <!-- Transition Locking UI (Critical Section) -->
-        <!-- Fixed: Removed double display property. Initially hidden. JS will set to flex. -->
         <div id="transition-overlay"
             style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.2);">
             <div
@@ -117,6 +121,7 @@
 
         <div id="debug-console"></div>
     </div>
+    <!-- Load main script as module, but verify standard scripts loaded first -->
     <script type="module" src="/src/main.js"></script>
 </body>
 

@@ -1,4 +1,6 @@
-import * as THREE from 'three';
+// REMOVE IMPORT: import * as THREE from 'three';
+// USE GLOBAL THREE INSTEAD
+const THREE = window.THREE; // Ensure we use the CDN-loaded THREE
 import { SceneManager } from './SceneManager.js';
 
 // --- Debug & Logger ---
@@ -14,6 +16,7 @@ function error(message) {
   console.error(message);
   if (debugConsole) {
     debugConsole.innerText += '[ERR] ' + message + '\n';
+    debugConsole.scrollTop = debugConsole.scrollHeight;
   }
 }
 
@@ -21,6 +24,11 @@ window.onerror = function (msg, url, lineNo, columnNo, error) {
   log(`Global Error: ${msg} at line ${lineNo}`);
   return false;
 };
+
+// Check Dependencies
+if (!THREE) {
+  error("CRITICAL: Three.js not loaded!");
+}
 
 // --- State Machine ---
 const AppState = {
@@ -69,6 +77,13 @@ const ui = {
 // --- Initialization ---
 async function init() {
   log('State: INIT');
+  log('Checking Dependencies...');
+  if (window.MINDAR) {
+    log('MindAR Loaded v' + (window.MINDAR.version || 'Unknown'));
+  } else {
+    error('MindAR Object NOT found on window');
+  }
+
   if (ui.arButton) {
     ui.arButton.addEventListener('click', startMindARPhase);
   } else {
@@ -82,14 +97,15 @@ async function startMindARPhase() {
   if (ui.mindarScanning) ui.mindarScanning.style.display = 'block';
   currentState = AppState.MINDAR_READY;
 
-  log('Starting MindAR...');
+  log('Starting MindAR Setup...');
 
   // Initialize MindAR Three
   try {
-    if (!window.MINDAR) {
-      throw new Error("window.MINDAR is not defined. Script not loaded.");
+    if (!window.MINDAR || !window.MINDAR.IMAGE) {
+      throw new Error("MindAR.IMAGE is missing. Upgrade or Check Script.");
     }
 
+    log("Creating MindARThree instance...");
     mindarThree = new window.MINDAR.IMAGE.MindARThree({
       container: document.body,
       imageTargetSrc: '/targets.mind', // Assumed file in public/
@@ -139,6 +155,7 @@ async function startMindARPhase() {
 
   // Start MindAR
   try {
+    log("Starting MindAR Video...");
     await mindarThree.start();
     renderer.setAnimationLoop(() => {
       if (currentState === AppState.MINDAR_TRACKING || currentState === AppState.POSE_STABILIZING) {
