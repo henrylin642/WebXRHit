@@ -251,11 +251,9 @@ function cancelPoseStabilization() {
 function bufferPose(group, camera) {
   if (!camera) return;
   group.updateWorldMatrix(true, false);
-  camera.updateWorldMatrix(true, false);
-  const relMatrix = new THREE.Matrix4().copy(camera.matrixWorld).invert().multiply(group.matrixWorld);
-  const relPos = new THREE.Vector3();
-  const relQuat = new THREE.Quaternion();
-  relMatrix.decompose(relPos, relQuat, new THREE.Vector3());
+  // MindAR anchor.group is already camera-relative; use local pose directly.
+  const relPos = group.position.clone();
+  const relQuat = group.quaternion.clone();
   if (FLIP_MARKER_Z) relPos.z *= -1;
   lastMindarRawPose = { position: relPos.clone(), quaternion: relQuat.clone() };
   relPos.multiplyScalar(PHYSICAL_MARKER_WIDTH);
