@@ -63,6 +63,7 @@ let webxrSessionStarting = false;
 const USE_GRAVITY_ALIGN = true;
 const FLIP_MARKER_Z = true;
 const AUTO_NORMALIZE_BY_VIDEO = true;
+const USE_MARKER_WIDTH_SCALE = false;
 
 // UI Elements
 let ui = {
@@ -276,8 +277,8 @@ function bufferPose(group, camera) {
     normPos.multiplyScalar(1 / lastVideoSize.height);
   }
   lastMindarNormPose = { position: normPos.clone(), quaternion: relQuat.clone() };
-  normPos.multiplyScalar(PHYSICAL_MARKER_WIDTH);
-  const scaledPos = normPos.clone();
+  const scaleFactor = USE_MARKER_WIDTH_SCALE ? PHYSICAL_MARKER_WIDTH : 1;
+  const scaledPos = normPos.clone().multiplyScalar(scaleFactor);
   lastMindarRelPose = { position: scaledPos.clone(), quaternion: relQuat.clone() };
   poseBuffer.push({ position: scaledPos, quaternion: relQuat });
 
@@ -293,7 +294,8 @@ function bufferPose(group, camera) {
       `mindar: (${scaledPos.x.toFixed(3)}, ${scaledPos.y.toFixed(3)}, ${scaledPos.z.toFixed(3)})\n` +
       `dxyz: (${dx.toFixed(3)}, ${dy.toFixed(3)}, ${dz.toFixed(3)})\n` +
       `rot: (${degX.toFixed(1)}, ${degY.toFixed(1)}, ${degZ.toFixed(1)})\n` +
-      `video: (${lastVideoSize.width}x${lastVideoSize.height})`;
+      `video: (${lastVideoSize.width}x${lastVideoSize.height})\n` +
+      `scale: ${scaleFactor.toFixed(3)}`;
   }
 }
 
