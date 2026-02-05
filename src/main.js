@@ -85,16 +85,22 @@ async function startMindARPhase() {
   log('Starting MindAR...');
 
   // Initialize MindAR Three
-  // Note: We create a temporary renderer for MindAR
   try {
+    if (!window.MINDAR) {
+      throw new Error("window.MINDAR is not defined. Script not loaded.");
+    }
+
     mindarThree = new window.MINDAR.IMAGE.MindARThree({
       container: document.body,
       imageTargetSrc: '/targets.mind', // Assumed file in public/
       filterMinCF: 0.0001, // Reduce jitter
-      filterBeta: 0.001
+      filterBeta: 0.001,
+      uiLoading: 'no', // Disable default loading UI
+      uiScanning: 'no'
     });
   } catch (e) {
-    error("MindAR Init Failed. Check if mind-ar script is loaded.");
+    error("MindAR Init Failed: " + e.message);
+    console.error(e);
     return;
   }
 
@@ -143,8 +149,8 @@ async function startMindARPhase() {
       renderer.render(mScene, mCamera);
     });
   } catch (e) {
-    error("MindAR Start Failed: " + e);
-    alert("Could not start Camera. Please ensure 'targets.mind' exists and camera permission is granted.");
+    error("MindAR Start Failed: " + e.message);
+    alert("Camera access denied or device not supported.");
   }
 }
 
@@ -344,12 +350,13 @@ function lockWorldOrigin(viewerPose) {
   // Marker Rotation = CameraRot * MindARRot
   const markerWorldRot = cameraQuaternion.clone().multiply(stabilizedPose.quaternion);
 
-  // Set Scene Root - MindAR Image Target is usually "Vertical" if it's a poster?
-  // MindAR coordinates: Z is coming out of image. X is right. Y is up.
-  // If the image is on a wall, MindAR Y is World Up.
-  // We trust MindAR's orientation relative to camera.
-
   sceneManager.worldRoot.position.copy(markerWorldPos);
+
+  // --- Vertical Alignment (Wall Mode) Fix ---
+  // If we want to align to a vertical wall properly, ensure the Z-axis (normal) 
+  // of the MindAR target maps to horizontal in WebXR.
+  // Usually MindAR "Image Up" is Y.
+  // We already copied rotation. Let's just trust it for now.
   sceneManager.worldRoot.quaternion.copy(markerWorldRot);
   sceneManager.worldRoot.visible = true;
 
