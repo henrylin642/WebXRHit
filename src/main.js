@@ -390,18 +390,18 @@ function renderWebXR(timestamp, frame) {
     else stableFramesCount = 0;
     if (stableFramesCount > 10) lockWorldOrigin(viewerPose);
   }
+  if (viewerPose && ui.cameraPose) {
+    const camPos = viewerPose.transform.position;
+    const rootPos = sceneManager.worldRoot.position;
+    const dx = camPos.x - rootPos.x;
+    const dy = camPos.y - rootPos.y;
+    const dz = camPos.z - rootPos.z;
+    ui.cameraPose.innerText =
+      `cam: (${camPos.x.toFixed(3)}, ${camPos.y.toFixed(3)}, ${camPos.z.toFixed(3)})\n` +
+      `dxyz: (${dx.toFixed(3)}, ${dy.toFixed(3)}, ${dz.toFixed(3)})`;
+  }
   if (currentState === AppState.RUNNING) {
     if (ui.poseInfo) ui.poseInfo.innerText = viewerPose && viewerPose.emulatedPosition ? "SLAM: LOST" : "SLAM: Tracking";
-    if (ui.cameraPose && viewerPose) {
-      const camPos = viewerPose.transform.position;
-      const rootPos = sceneManager.worldRoot.position;
-      const dx = camPos.x - rootPos.x;
-      const dy = camPos.y - rootPos.y;
-      const dz = camPos.z - rootPos.z;
-      ui.cameraPose.innerText =
-        `cam: (${camPos.x.toFixed(3)}, ${camPos.y.toFixed(3)}, ${camPos.z.toFixed(3)})\n` +
-        `dxyz: (${dx.toFixed(3)}, ${dy.toFixed(3)}, ${dz.toFixed(3)})`;
-    }
   }
   webxrRenderer.render(scene, camera);
 }

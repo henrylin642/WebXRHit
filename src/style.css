@@ -176,7 +176,7 @@ button:active {
 
 #camera-pose {
   position: absolute;
-  bottom: 40px;
+  bottom: 140px;
   left: 20px;
   color: #00ff00;
   font-family: monospace;
@@ -184,6 +184,8 @@ button:active {
   background: rgba(0, 0, 0, 0.5);
   padding: 4px;
   white-space: pre-wrap;
+  z-index: 10000;
+  pointer-events: none;
 }
 
 #settings-btn {
