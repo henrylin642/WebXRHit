@@ -59,10 +59,11 @@ let lastVideoSize = { width: 0, height: 0 };
 // IMPORTANT: Physical width of the marker in meters.
 let PHYSICAL_MARKER_WIDTH = 0.58;
 const TARGET_OFFSETS = {
-  0: new THREE.Vector3(0, -0.29, 0), // Top: Center is 29cm below top edge
-  1: new THREE.Vector3(0, -0.87, 0), // Mid: Center is (58+29)cm below top edge
-  2: new THREE.Vector3(0, -1.30, 0)  // Bottom: Estimated (Adjust if height is known)
+  1: new THREE.Vector3(0, -0.29, 0), // Top (掃描上半部正確顯示為 1)
+  0: new THREE.Vector3(0, -0.87, 0), // Mid (假設 0 為中部)
+  2: new THREE.Vector3(0, -1.45, 0)  // Bottom
 };
+const TARGET_NAMES = { 1: "TOP (上)", 0: "MID (中)", 2: "BOT (下)" };
 let currentTargetIndex = 0;
 const MAX_MARKER_DISTANCE = 5;
 let webxrSessionStarting = false;
@@ -207,7 +208,8 @@ async function startMindARPhase() {
 
     anchor.onTargetFound = () => {
       if (currentState === AppState.MINDAR_READY) {
-        log(`Target ${i} Found! Stabilizing...`);
+        const name = TARGET_NAMES[i] || "Unknown";
+        log(`Target Found: ${name} (Index ${i})`);
         currentTargetIndex = i;
         mindarAnchor = anchor;
         currentState = AppState.MINDAR_TRACKING;
@@ -339,7 +341,7 @@ function bufferPose(group, camera) {
     const degY = THREE.MathUtils.radToDeg(euler.y);
     const degZ = THREE.MathUtils.radToDeg(euler.z);
     ui.mindarPose.innerText =
-      `Target Index: ${currentTargetIndex}\n` +
+      `Target: ${TARGET_NAMES[currentTargetIndex] || "None"} (Idx:${currentTargetIndex})\n` +
       `mindar: (${scaledPos.x.toFixed(3)}, ${scaledPos.y.toFixed(3)}, ${scaledPos.z.toFixed(3)})\n` +
       `dxyz: (${dx.toFixed(3)}, ${dy.toFixed(3)}, ${dz.toFixed(3)})\n` +
       `rot: (${degX.toFixed(1)}, ${degY.toFixed(1)}, ${degZ.toFixed(1)})\n` +
