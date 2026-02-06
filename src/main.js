@@ -59,11 +59,11 @@ let lastVideoSize = { width: 0, height: 0 };
 // IMPORTANT: Physical width of the marker in meters.
 let PHYSICAL_MARKER_WIDTH = 0.58;
 const TARGET_OFFSETS = {
-  1: new THREE.Vector3(0, -0.29, 0), // Top (掃描上半部正確顯示為 1)
-  0: new THREE.Vector3(0, -0.87, 0), // Mid (假設 0 為中部)
-  2: new THREE.Vector3(0, -1.45, 0)  // Bottom
+  0: new THREE.Vector3(0, -0.29, 0), // Top (Idx 0): 中心在頂端下方 29cm
+  1: new THREE.Vector3(0, -0.87, 0), // Mid (Idx 1): 中心在頂端下方 87cm
+  2: new THREE.Vector3(0, -1.45, 0)  // Bot (Idx 2)
 };
-const TARGET_NAMES = { 1: "TOP (上)", 0: "MID (中)", 2: "BOT (下)" };
+const TARGET_NAMES = { 0: "TOP (上)", 1: "MID (中)", 2: "BOT (下)" };
 let currentTargetIndex = 0;
 const MAX_MARKER_DISTANCE = 5;
 let webxrSessionStarting = false;
