@@ -73,6 +73,7 @@ const USE_MARKER_WIDTH_SCALE = true;
 const INVERT_MARKER_OFFSET = true;
 const WORLD_Y_OFFSET = 0.0;
 const ALIGN_MODE = "gravity+board"; // "gravity+board" | "full"
+const MINDAR_SCALE_ADJUST = 3.0; // 根據用戶回饋修正 3 倍誤差
 let pendingWebXRStart = false;
 
 // UI Elements
@@ -324,7 +325,7 @@ function bufferPose(group, camera) {
   }
 
   lastMindarNormPose = { position: normPos.clone(), quaternion: relQuat.clone() };
-  const scaleFactor = USE_MARKER_WIDTH_SCALE ? PHYSICAL_MARKER_WIDTH : 1;
+  const scaleFactor = (USE_MARKER_WIDTH_SCALE ? PHYSICAL_MARKER_WIDTH : 1) / MINDAR_SCALE_ADJUST;
   const scaledPos = normPos.clone().multiplyScalar(scaleFactor);
   lastMindarRelPose = { position: scaledPos.clone(), quaternion: relQuat.clone() };
   poseBuffer.push({ position: scaledPos, quaternion: relQuat });
@@ -338,6 +339,7 @@ function bufferPose(group, camera) {
     const degY = THREE.MathUtils.radToDeg(euler.y);
     const degZ = THREE.MathUtils.radToDeg(euler.z);
     ui.mindarPose.innerText =
+      `Target Index: ${currentTargetIndex}\n` +
       `mindar: (${scaledPos.x.toFixed(3)}, ${scaledPos.y.toFixed(3)}, ${scaledPos.z.toFixed(3)})\n` +
       `dxyz: (${dx.toFixed(3)}, ${dy.toFixed(3)}, ${dz.toFixed(3)})\n` +
       `rot: (${degX.toFixed(1)}, ${degY.toFixed(1)}, ${degZ.toFixed(1)})\n` +
