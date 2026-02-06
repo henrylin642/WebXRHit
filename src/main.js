@@ -57,7 +57,13 @@ let lastMindarNormPose = null;
 let lastVideoSize = { width: 0, height: 0 };
 
 // IMPORTANT: Physical width of the marker in meters.
-let PHYSICAL_MARKER_WIDTH = 0.55;
+let PHYSICAL_MARKER_WIDTH = 0.58;
+const TARGET_OFFSETS = {
+  0: new THREE.Vector3(0, -0.29, 0), // Top: Center is 29cm below top edge
+  1: new THREE.Vector3(0, -0.87, 0), // Mid: Center is (58+29)cm below top edge
+  2: new THREE.Vector3(0, -1.30, 0)  // Bottom: Estimated (Adjust if height is known)
+};
+let currentTargetIndex = 0;
 const MAX_MARKER_DISTANCE = 5;
 let webxrSessionStarting = false;
 const USE_GRAVITY_ALIGN = true;
@@ -191,24 +197,34 @@ async function startMindARPhase() {
   const geometry = new THREE.SphereGeometry(0.1, 32, 32);
   const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
   const sphere = new THREE.Mesh(geometry, material);
-  mindarAnchor.group.add(sphere);
 
-  mindarAnchor.onTargetFound = () => {
-    if (currentState === AppState.MINDAR_READY) {
-      log('Target Found! Stabilizing...');
-      currentState = AppState.MINDAR_TRACKING;
-      beginPoseStabilization();
-    }
-  };
+  // Use a loop to setup multiple anchors
+  for (let i = 0; i < 3; i++) {
+    const anchor = mindarThree.addAnchor(i);
+    // Visual feedback for development (optional: only add to the first one or all)
+    if (i === 0) anchor.group.add(sphere);
 
-  mindarAnchor.onTargetLost = () => {
-    if (currentState === AppState.MINDAR_TRACKING || currentState === AppState.POSE_STABILIZING) {
-      log('Target Lost - Abort Transition');
-      cancelPoseStabilization();
-      currentState = AppState.MINDAR_READY;
-      if (ui.transition) ui.transition.style.display = 'none';
-    }
-  };
+    anchor.onTargetFound = () => {
+      if (currentState === AppState.MINDAR_READY) {
+        log(`Target ${i} Found! Stabilizing...`);
+        currentTargetIndex = i;
+        mindarAnchor = anchor;
+        currentState = AppState.MINDAR_TRACKING;
+        beginPoseStabilization();
+      }
+    };
+
+    anchor.onTargetLost = () => {
+      if (currentState === AppState.MINDAR_TRACKING || currentState === AppState.POSE_STABILIZING) {
+        if (mindarAnchor === anchor) {
+          log('Target Lost - Abort Transition');
+          cancelPoseStabilization();
+          currentState = AppState.MINDAR_READY;
+          if (ui.transition) ui.transition.style.display = 'none';
+        }
+      }
+    };
+  }
 
   try {
     log("Starting MindAR Video...");
@@ -496,12 +512,20 @@ function lockWorldOrigin(viewerPose) {
   lockWaitFrames = 0;
   const cameraPosition = new THREE.Vector3().copy(viewerPose.transform.position);
   const cameraQuaternion = new THREE.Quaternion().copy(viewerPose.transform.orientation);
-  const offsetPos = stabilizedPose.position.clone();
+
+  // 1. Get stabilized pose (Target relative to Camera)
+  const relPos = stabilizedPose.position.clone();
+  const relQuat = stabilizedPose.quaternion.clone();
+
+  // 2. Adjust Origin: The "Top Edge Center" relative to the detected Target center
+  // If Target is at (0,-0.29,0) relative to Top, then Top is at (0,+0.29,0) relative to Target
+  const targetToOrigin = TARGET_OFFSETS[currentTargetIndex].clone().multiplyScalar(-1);
+  const originInCamSpace = relPos.clone().add(targetToOrigin.applyQuaternion(relQuat));
+
+  const offsetPos = originInCamSpace.clone();
   if (INVERT_MARKER_OFFSET) offsetPos.multiplyScalar(-1);
   offsetPos.applyQuaternion(cameraQuaternion);
-  if (offsetPos.length() > MAX_MARKER_DISTANCE) {
-    offsetPos.setLength(MAX_MARKER_DISTANCE);
-  }
+
   const markerWorldPos = cameraPosition.clone().add(offsetPos);
   markerWorldPos.y += WORLD_Y_OFFSET;
   const markerWorldRot = cameraQuaternion.clone().multiply(stabilizedPose.quaternion);
