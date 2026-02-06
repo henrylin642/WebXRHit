@@ -57,7 +57,6 @@ let lastMindarNormPose = null;
 let lastVideoSize = { width: 0, height: 0 };
 
 // IMPORTANT: Physical width of the marker in meters.
-let PHYSICAL_MARKER_WIDTH = 0.58;
 const TARGET_OFFSETS = {
   0: new THREE.Vector3(0, -0.29, 0), // Top (Idx 0): 中心在頂端下方 29cm
   1: new THREE.Vector3(0, -0.87, 0), // Mid (Idx 1): 中心在頂端下方 87cm
@@ -71,7 +70,7 @@ const USE_GRAVITY_ALIGN = true;
 const FLIP_MARKER_Z = true;
 const AUTO_NORMALIZE_BY_VIDEO = true;
 const USE_MARKER_WIDTH_SCALE = true;
-const INVERT_MARKER_OFFSET = true;
+const INVERT_MARKER_OFFSET = false; // 修正：不再反轉位移，讓加法邏輯直覺化
 const WORLD_Y_OFFSET = 0.0;
 const ALIGN_MODE = "gravity+board"; // "gravity+board" | "full"
 const MINDAR_SCALE_ADJUST = 3.0; // 根據用戶回饋修正 3 倍誤差
@@ -548,13 +547,13 @@ function lockWorldOrigin(viewerPose) {
   const targetToOrigin = TARGET_OFFSETS[currentTargetIndex].clone().multiplyScalar(-1);
   const originInCamSpace = relPos.clone().add(targetToOrigin.applyQuaternion(relQuat));
 
-  const offsetPos = originInCamSpace.clone();
-  if (INVERT_MARKER_OFFSET) offsetPos.multiplyScalar(-1);
-  offsetPos.applyQuaternion(cameraQuaternion);
+  // 3. Transformation to World Space
+  // originInCamSpace is the origin's position RELATIVE TO the WebXR camera.
+  // markerWorldPos should be where the origin is in the WebXR world.
+  const markerWorldPos = cameraPosition.clone().add(originInCamSpace.clone().applyQuaternion(cameraQuaternion));
 
-  const markerWorldPos = cameraPosition.clone().add(offsetPos);
   markerWorldPos.y += WORLD_Y_OFFSET;
-  const markerWorldRot = cameraQuaternion.clone().multiply(stabilizedPose.quaternion);
+  const markerWorldRot = cameraQuaternion.clone().multiply(relQuat);
   let finalRotation = markerWorldRot;
   if (USE_GRAVITY_ALIGN) {
     if (ALIGN_MODE === "full") {
