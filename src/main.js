@@ -312,22 +312,26 @@ function bufferPose(group, camera) {
   // MindAR anchor.group world matrix encodes the camera-relative pose.
   const relPos = new THREE.Vector3();
   const relQuat = new THREE.Quaternion();
-  // MindAR updates anchor.group.matrix directly (matrixAutoUpdate is false).
+  // MindAR updates anchor.group.matrix directly.
   group.matrix.decompose(relPos, relQuat, new THREE.Vector3());
-  if (FLIP_MARKER_Z) relPos.z *= -1;
+
+  // Standard Three.js: Objects in front of camera have negative Z.
+  // We no longer manually flip Z here to maintain camera-space consistency.
+
   lastMindarRawPose = { position: relPos.clone(), quaternion: relQuat.clone() };
+
   // Calculate focal length from MindAR camera
   const proj = camera.projectionMatrix.elements;
   const focalLength = (proj[5] * lastVideoSize.height) / 2;
 
   let normPos = relPos.clone();
-  // Standardize units: normalized_dist = pixels / focalLength
   if (focalLength > 0) {
     normPos.divideScalar(focalLength);
   }
 
   lastMindarNormPose = { position: normPos.clone(), quaternion: relQuat.clone() };
-  const scaleFactor = (USE_MARKER_WIDTH_SCALE ? PHYSICAL_MARKER_WIDTH : 1) / MINDAR_SCALE_ADJUST;
+  // 修正比例係數：根據用戶 2.5m 實測數據微調
+  const scaleFactor = (USE_MARKER_WIDTH_SCALE ? PHYSICAL_MARKER_WIDTH : 1) / 3.0;
   const scaledPos = normPos.clone().multiplyScalar(scaleFactor);
   lastMindarRelPose = { position: scaledPos.clone(), quaternion: relQuat.clone() };
   poseBuffer.push({ position: scaledPos, quaternion: relQuat });
@@ -539,18 +543,19 @@ function lockWorldOrigin(viewerPose) {
   const cameraPosition = new THREE.Vector3().copy(viewerPose.transform.position);
   const cameraQuaternion = new THREE.Quaternion().copy(viewerPose.transform.orientation);
 
-  // 1. Get stabilized pose (Target relative to Camera)
+  // 1. Get stabilized pose in Camera Space (relPos.z is negative if in front)
   const relPos = stabilizedPose.position.clone();
   const relQuat = stabilizedPose.quaternion.clone();
 
   // 2. Adjust Origin: The "Top Edge Center" relative to the detected Target center
   // If Target is at (0,-0.29,0) relative to Top, then Top is at (0,+0.29,0) relative to Target
   const targetToOrigin = TARGET_OFFSETS[currentTargetIndex].clone().multiplyScalar(-1);
+
+  // Important: apply target-to-origin offset in marker's local space then transform to camera space
   const originInCamSpace = relPos.clone().add(targetToOrigin.applyQuaternion(relQuat));
 
   // 3. Transformation to World Space
-  // originInCamSpace is the origin's position RELATIVE TO the WebXR camera.
-  // markerWorldPos should be where the origin is in the WebXR world.
+  // We place the world root where the origin is calculated to be in world space
   const markerWorldPos = cameraPosition.clone().add(originInCamSpace.clone().applyQuaternion(cameraQuaternion));
 
   markerWorldPos.y += WORLD_Y_OFFSET;
