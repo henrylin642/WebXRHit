@@ -55,7 +55,7 @@
             style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.2);">
             <div
                 style="background: rgba(0, 0, 0, 0.85); padding: 30px; border-radius: 16px; text-align: center; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(10px); box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
-                <div style="font-size: 40px; margin-bottom: 20px;">✋</div>
+                <div id="lock-status-icon" style="font-size: 40px; margin-bottom: 20px;">✋</div>
                 <div style="color: white; font-size: 24px; font-weight: bold; margin-bottom: 8px;">請保持不動</div>
                 <div style="color: #ccc; font-size: 14px;">正在鎖定空間座標...</div>
                 <div
@@ -63,6 +63,10 @@
                     <div id="lock-progress"
                         style="width: 0%; height: 100%; background: #00ff88; transition: width 0.1s;"></div>
                 </div>
+                <button id="confirm-lock-btn"
+                    style="display: none; margin-top: 25px; padding: 14px 28px; background: #00ff88; color: black; border: none; border-radius: 12px; font-weight: bold; font-size: 16px; cursor: pointer; width: 100%; box-shadow: 0 4px 15px rgba(0,255,136,0.3);">
+                    鎖定完成，進入 AR
+                </button>
                 <div style="color: #888; font-size: 12px; margin-top: 10px;">請勿移動手機，避免座標偏移</div>
             </div>
         </div>

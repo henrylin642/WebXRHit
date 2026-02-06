@@ -275,9 +275,25 @@ function beginPoseStabilization() {
 
     if (progress >= 100) {
       clearInterval(poseStabilizeTimer);
-      finalizeStabilization();
+      showConfirmButton(); // 顯示手動進入按鈕
     }
   }, interval);
+}
+
+function showConfirmButton() {
+  const btn = document.getElementById('confirm-lock-btn');
+  const statusText = document.querySelector('#transition-overlay div div:nth-child(3)');
+  const icon = document.getElementById('lock-status-icon');
+
+  if (btn) btn.style.display = 'block';
+  if (statusText) statusText.innerText = '位置已鎖定！';
+  if (icon) icon.innerText = '✅';
+
+  // 監聽點擊進入 WebXR
+  btn.onclick = () => {
+    btn.style.display = 'none';
+    finalizeStabilization();
+  };
 }
 
 function cancelPoseStabilization() {
@@ -297,10 +313,16 @@ function bufferPose(group, camera) {
   group.matrix.decompose(relPos, relQuat, new THREE.Vector3());
   if (FLIP_MARKER_Z) relPos.z *= -1;
   lastMindarRawPose = { position: relPos.clone(), quaternion: relQuat.clone() };
+  // Calculate focal length from MindAR camera
+  const proj = camera.projectionMatrix.elements;
+  const focalLength = (proj[5] * lastVideoSize.height) / 2;
+
   let normPos = relPos.clone();
-  if (AUTO_NORMALIZE_BY_VIDEO && lastVideoSize.height > 0 && normPos.length() > 10) {
-    normPos.multiplyScalar(1 / lastVideoSize.height);
+  // Standardize units: normalized_dist = pixels / focalLength
+  if (focalLength > 0) {
+    normPos.divideScalar(focalLength);
   }
+
   lastMindarNormPose = { position: normPos.clone(), quaternion: relQuat.clone() };
   const scaleFactor = USE_MARKER_WIDTH_SCALE ? PHYSICAL_MARKER_WIDTH : 1;
   const scaledPos = normPos.clone().multiplyScalar(scaleFactor);
