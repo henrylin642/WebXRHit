@@ -59,6 +59,18 @@ let lastVideoSize = { width: 0, height: 0 };
 // IMPORTANT: Physical width of the marker in meters.
 let PHYSICAL_MARKER_WIDTH = 0.58;
 let MINDAR_TARGET_SRC = '/targets.mind';
+let REQUESTED_VIDEO_HEIGHT = 720; // Default to 720p
+
+// --- Testing Metrics Globals ---
+let metrics = {
+  maxDistance: 0,
+  consecutiveFrames: 0,
+  rotationHistory: [], // Array of Euler angles for SD calculation
+  jitterSD: 0,
+  caseADetected: false
+};
+const JITTER_WINDOW_SIZE = 30;
+
 const TARGET_OFFSETS = {
   0: new THREE.Vector3(0, -0.29, 0), // Top (Idx 0): 中心在頂端下方 29cm
   1: new THREE.Vector3(0, -0.87, 0), // Mid (Idx 1): 中心在頂端下方 87cm
@@ -98,7 +110,13 @@ let ui = {
   saveSettings: document.getElementById('save-settings'),
   closeSettings: document.getElementById('close-settings'),
   widthInput: document.getElementById('marker-width-input'),
-  targetInput: document.getElementById('mind-target-input')
+  targetInput: document.getElementById('mind-target-input'),
+  resInput: document.getElementById('camera-res-input'),
+  metricsOverlay: document.getElementById('metrics-overlay'),
+  metricRes: document.getElementById('metric-res'),
+  metricDist: document.getElementById('metric-dist'),
+  metricStability: document.getElementById('metric-stability'),
+  metricJitter: document.getElementById('metric-jitter')
 };
 
 // --- Initialization ---
@@ -118,6 +136,13 @@ async function init() {
     MINDAR_TARGET_SRC = savedTarget;
     if (ui.targetInput) ui.targetInput.value = MINDAR_TARGET_SRC;
     log(`Loaded saved target: ${MINDAR_TARGET_SRC}`);
+  }
+
+  const savedRes = localStorage.getItem('cameraRes');
+  if (savedRes) {
+    REQUESTED_VIDEO_HEIGHT = parseInt(savedRes);
+    if (ui.resInput) ui.resInput.value = REQUESTED_VIDEO_HEIGHT;
+    log(`Loaded saved camera resolution: ${REQUESTED_VIDEO_HEIGHT}p`);
   }
 
   if (ui.arButton) {
@@ -143,6 +168,7 @@ async function init() {
     ui.saveSettings.addEventListener('click', () => {
       const widthVal = parseFloat(ui.widthInput.value);
       const targetVal = ui.targetInput.value;
+      const resVal = parseInt(ui.resInput.value);
       let needsReload = false;
 
       if (widthVal > 0) {
@@ -160,6 +186,13 @@ async function init() {
         MINDAR_TARGET_SRC = targetVal;
         localStorage.setItem('mindarTarget', targetVal);
         log(`Updated MindAR Target to: ${targetVal}`);
+        needsReload = true;
+      }
+
+      if (REQUESTED_VIDEO_HEIGHT !== resVal) {
+        REQUESTED_VIDEO_HEIGHT = resVal;
+        localStorage.setItem('cameraRes', resVal);
+        log(`Updated Camera Resolution to: ${resVal}p`);
         needsReload = true;
       }
 
@@ -202,8 +235,7 @@ async function startMindARPhase() {
       imageTargetSrc: MINDAR_TARGET_SRC,
       video: {
         facingMode: 'environment',
-        width: { min: 1280, ideal: 1920 },
-        height: { min: 720, ideal: 1080 }
+        height: { ideal: REQUESTED_VIDEO_HEIGHT }
       },
       filterMinCF: 0.0001,
       filterBeta: 0.001,
@@ -238,9 +270,20 @@ async function startMindARPhase() {
       if (currentState === AppState.MINDAR_READY) {
         const name = TARGET_NAMES[i] || "Unknown";
         log(`Target Found: ${name} (Index ${i})`);
+
+        // --- Metrics Detection ---
+        if (lastMindarRelPose) {
+          const dist = lastMindarRelPose.position.length();
+          metrics.maxDistance = dist;
+          log(`First Detection Distance: ${dist.toFixed(3)}m`);
+        }
+
         currentTargetIndex = i;
         mindarAnchor = anchor;
         currentState = AppState.MINDAR_TRACKING;
+
+        if (ui.metricsOverlay) ui.metricsOverlay.style.display = 'block';
+
         beginPoseStabilization();
       }
     };
@@ -277,7 +320,11 @@ async function startMindARPhase() {
       if (currentState === AppState.MINDAR_TRACKING || currentState === AppState.POSE_STABILIZING) {
         if (currentState === AppState.POSE_STABILIZING) {
           bufferPose(mindarAnchor.group, mCamera);
+          updateMetrics();
         }
+        metrics.consecutiveFrames++;
+      } else {
+        metrics.consecutiveFrames = 0;
       }
       renderer.render(mScene, mCamera);
     });
@@ -374,12 +421,44 @@ function bufferPose(group, camera) {
     const degZ = THREE.MathUtils.radToDeg(euler.z);
     ui.mindarPose.innerText =
       `Target: ${TARGET_NAMES[currentTargetIndex] || "None"} (Idx:${currentTargetIndex})\n` +
-      `mindar: (${scaledPos.x.toFixed(3)}, ${scaledPos.y.toFixed(3)}, ${scaledPos.z.toFixed(3)})\n` +
-      `dxyz: (${dx.toFixed(3)}, ${dy.toFixed(3)}, ${dz.toFixed(3)})\n` +
-      `rot: (${degX.toFixed(1)}, ${degY.toFixed(1)}, ${degZ.toFixed(1)})\n` +
-      `video: (${lastVideoSize.width}x${lastVideoSize.height})\n` +
-      `scale: ${scaleFactor.toFixed(3)} dist: ${scaledPos.length().toFixed(3)}`;
+      `Video: ${lastVideoSize.width}x${lastVideoSize.height} (${REQUESTED_VIDEO_HEIGHT}p set)\n` +
+      `Diagnosis: ${lastVideoSize.height >= REQUESTED_VIDEO_HEIGHT ? "Case B (MindAR Limit?)" : "Case A (Camera Limit?)"}\n` +
+      `Rel: (${scaledPos.x.toFixed(3)}, ${scaledPos.y.toFixed(3)}, ${scaledPos.z.toFixed(3)})\n` +
+      `Rot: (${degX.toFixed(1)}, ${degY.toFixed(1)}, ${degZ.toFixed(1)})\n` +
+      `Dist: ${scaledPos.length().toFixed(3)}m`;
   }
+}
+
+function updateMetrics() {
+  if (!lastMindarRelPose) return;
+
+  // Track Rotation History for Jitter (SD)
+  const euler = new THREE.Euler().setFromQuaternion(lastMindarRelPose.quaternion, 'YXZ');
+  metrics.rotationHistory.push({ x: euler.x, y: euler.y, z: euler.z });
+  if (metrics.rotationHistory.length > JITTER_WINDOW_SIZE) {
+    metrics.rotationHistory.shift();
+  }
+
+  // Calculate StdDev of Rotation
+  if (metrics.rotationHistory.length >= 10) {
+    const avg = { x: 0, y: 0, z: 0 };
+    metrics.rotationHistory.forEach(r => { avg.x += r.x; avg.y += r.y; avg.z += r.z; });
+    avg.x /= metrics.rotationHistory.length;
+    avg.y /= metrics.rotationHistory.length;
+    avg.z /= metrics.rotationHistory.length;
+
+    let variance = 0;
+    metrics.rotationHistory.forEach(r => {
+      variance += Math.pow(r.x - avg.x, 2) + Math.pow(r.y - avg.y, 2) + Math.pow(r.z - avg.z, 2);
+    });
+    metrics.jitterSD = Math.sqrt(variance / metrics.rotationHistory.length);
+  }
+
+  // Update UI
+  if (ui.metricRes) ui.metricRes.innerText = `Res: ${lastVideoSize.width}x${lastVideoSize.height} (${REQUESTED_VIDEO_HEIGHT}p)`;
+  if (ui.metricDist) ui.metricDist.innerText = `Max Dist: ${metrics.maxDistance.toFixed(3)}m`;
+  if (ui.metricStability) ui.metricStability.innerText = `Stability: ${metrics.consecutiveFrames} frames`;
+  if (ui.metricJitter) ui.metricJitter.innerText = `Jitter (SD): ${metrics.jitterSD.toFixed(4)}`;
 }
 
 function finalizeStabilization() {
