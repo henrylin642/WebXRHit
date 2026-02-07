@@ -58,6 +58,7 @@ let lastVideoSize = { width: 0, height: 0 };
 
 // IMPORTANT: Physical width of the marker in meters.
 let PHYSICAL_MARKER_WIDTH = 0.58;
+let MINDAR_TARGET_SRC = '/targets.mind';
 const TARGET_OFFSETS = {
   0: new THREE.Vector3(0, -0.29, 0), // Top (Idx 0): 中心在頂端下方 29cm
   1: new THREE.Vector3(0, -0.87, 0), // Mid (Idx 1): 中心在頂端下方 87cm
@@ -96,7 +97,8 @@ let ui = {
   settingsModal: document.getElementById('settings-modal'),
   saveSettings: document.getElementById('save-settings'),
   closeSettings: document.getElementById('close-settings'),
-  widthInput: document.getElementById('marker-width-input')
+  widthInput: document.getElementById('marker-width-input'),
+  targetInput: document.getElementById('mind-target-input')
 };
 
 // --- Initialization ---
@@ -109,6 +111,13 @@ async function init() {
     PHYSICAL_MARKER_WIDTH = parseFloat(savedWidth);
     if (ui.widthInput) ui.widthInput.value = PHYSICAL_MARKER_WIDTH;
     log(`Loaded saved marker width: ${PHYSICAL_MARKER_WIDTH}m`);
+  }
+
+  const savedTarget = localStorage.getItem('mindarTarget');
+  if (savedTarget) {
+    MINDAR_TARGET_SRC = savedTarget;
+    if (ui.targetInput) ui.targetInput.value = MINDAR_TARGET_SRC;
+    log(`Loaded saved target: ${MINDAR_TARGET_SRC}`);
   }
 
   if (ui.arButton) {
@@ -132,14 +141,33 @@ async function init() {
 
   if (ui.saveSettings) {
     ui.saveSettings.addEventListener('click', () => {
-      const val = parseFloat(ui.widthInput.value);
-      if (val > 0) {
-        PHYSICAL_MARKER_WIDTH = val;
-        localStorage.setItem('markerWidth', val);
-        log(`Updated Marker Width to: ${val}m`);
-        if (ui.settingsModal) ui.settingsModal.style.display = 'none';
+      const widthVal = parseFloat(ui.widthInput.value);
+      const targetVal = ui.targetInput.value;
+      let needsReload = false;
+
+      if (widthVal > 0) {
+        if (PHYSICAL_MARKER_WIDTH !== widthVal) {
+          PHYSICAL_MARKER_WIDTH = widthVal;
+          localStorage.setItem('markerWidth', widthVal);
+          log(`Updated Marker Width to: ${widthVal}m`);
+        }
       } else {
         alert("Invalid width");
+        return;
+      }
+
+      if (MINDAR_TARGET_SRC !== targetVal) {
+        MINDAR_TARGET_SRC = targetVal;
+        localStorage.setItem('mindarTarget', targetVal);
+        log(`Updated MindAR Target to: ${targetVal}`);
+        needsReload = true;
+      }
+
+      if (ui.settingsModal) ui.settingsModal.style.display = 'none';
+
+      if (needsReload) {
+        log("Target changed - reloading page...");
+        setTimeout(() => location.reload(), 500);
       }
     });
   }
@@ -171,7 +199,7 @@ async function startMindARPhase() {
     log("Creating MindARThree instance...");
     mindarThree = new MindARThree({
       container: document.body,
-      imageTargetSrc: '/targets.mind',
+      imageTargetSrc: MINDAR_TARGET_SRC,
       video: {
         facingMode: 'environment',
         width: { min: 1280, ideal: 1920 },
