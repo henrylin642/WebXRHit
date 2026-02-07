@@ -60,6 +60,7 @@ let lastVideoSize = { width: 0, height: 0 };
 let PHYSICAL_MARKER_WIDTH = 0.58;
 let MINDAR_TARGET_SRC = '/targets.mind';
 let REQUESTED_VIDEO_HEIGHT = 720; // Default to 720p
+let DISTANCE_BIAS = 1.0; // Manual calibration factor
 
 // --- Testing Metrics Globals ---
 let metrics = {
@@ -112,6 +113,7 @@ let ui = {
   widthInput: document.getElementById('marker-width-input'),
   targetInput: document.getElementById('mind-target-input'),
   resInput: document.getElementById('camera-res-input'),
+  biasInput: document.getElementById('distance-bias-input'),
   metricsOverlay: document.getElementById('metrics-overlay'),
   metricRes: document.getElementById('metric-res'),
   metricDist: document.getElementById('metric-dist'),
@@ -145,6 +147,13 @@ async function init() {
     log(`Loaded saved camera resolution: ${REQUESTED_VIDEO_HEIGHT}p`);
   }
 
+  const savedBias = localStorage.getItem('distanceBias');
+  if (savedBias) {
+    DISTANCE_BIAS = parseFloat(savedBias);
+    if (ui.biasInput) ui.biasInput.value = DISTANCE_BIAS;
+    log(`Loaded saved distance bias: ${DISTANCE_BIAS}`);
+  }
+
   if (ui.arButton) {
     ui.arButton.innerText = "Start Experience";
     ui.arButton.disabled = false;
@@ -169,7 +178,16 @@ async function init() {
       const widthVal = parseFloat(ui.widthInput.value);
       const targetVal = ui.targetInput.value;
       const resVal = parseInt(ui.resInput.value);
+      const biasVal = parseFloat(ui.biasInput.value);
       let needsReload = false;
+
+      if (DISTANCE_BIAS !== biasVal) {
+        DISTANCE_BIAS = biasVal;
+        localStorage.setItem('distanceBias', biasVal);
+        log(`Updated Distance Bias to: ${biasVal}`);
+        // No reload needed for bias if we apply it dynamically, but we'll reload for now for consistency
+        needsReload = true;
+      }
 
       if (widthVal > 0) {
         if (PHYSICAL_MARKER_WIDTH !== widthVal) {
@@ -235,7 +253,7 @@ async function startMindARPhase() {
       imageTargetSrc: MINDAR_TARGET_SRC,
       video: {
         facingMode: 'environment',
-        height: { ideal: REQUESTED_VIDEO_HEIGHT }
+        height: { min: REQUESTED_VIDEO_HEIGHT, ideal: REQUESTED_VIDEO_HEIGHT, max: REQUESTED_VIDEO_HEIGHT }
       },
       filterMinCF: 0.0001,
       filterBeta: 0.001,
@@ -387,27 +405,16 @@ function bufferPose(group, camera) {
   // MindAR anchor.group world matrix encodes the camera-relative pose.
   const relPos = new THREE.Vector3();
   const relQuat = new THREE.Quaternion();
-  // MindAR updates anchor.group.matrix directly.
+  // MindARupdates anchor.group.matrix directly.
   group.matrix.decompose(relPos, relQuat, new THREE.Vector3());
-
-  // Standard Three.js: Objects in front of camera have negative Z.
-  // We no longer manually flip Z here to maintain camera-space consistency.
 
   lastMindarRawPose = { position: relPos.clone(), quaternion: relQuat.clone() };
 
-  // Calculate focal length from MindAR camera
-  const proj = camera.projectionMatrix.elements;
-  const focalLength = (proj[5] * lastVideoSize.height) / 2;
+  // --- Simplified Distance Model ---
+  // In MindAR v1.2.5, relPos is roughly in marker-width units if FOV is not calibrated.
+  // We apply the physical width and then a manual bias factor for precise real-world matching.
+  const scaledPos = relPos.clone().multiplyScalar(PHYSICAL_MARKER_WIDTH * DISTANCE_BIAS);
 
-  let normPos = relPos.clone();
-  if (focalLength > 0) {
-    normPos.divideScalar(focalLength);
-  }
-
-  lastMindarNormPose = { position: normPos.clone(), quaternion: relQuat.clone() };
-  // 修正比例係數：根據用戶 2.5m 實測數據微調
-  const scaleFactor = (USE_MARKER_WIDTH_SCALE ? PHYSICAL_MARKER_WIDTH : 1) / 3.0;
-  const scaledPos = normPos.clone().multiplyScalar(scaleFactor);
   lastMindarRelPose = { position: scaledPos.clone(), quaternion: relQuat.clone() };
   poseBuffer.push({ position: scaledPos, quaternion: relQuat });
 
@@ -616,19 +623,8 @@ function renderWebXR(timestamp, frame) {
     };
     ui.cameraPose.innerText =
       `cam: (${camPos.x.toFixed(3)}, ${camPos.y.toFixed(3)}, ${camPos.z.toFixed(3)})\n` +
-      `dxyz: (${dx.toFixed(3)}, ${dy.toFixed(3)}, ${dz.toFixed(3)})\n` +
-      (mindarRawPos
-        ? `raw: (${mindarRawPos.x.toFixed(3)}, ${mindarRawPos.y.toFixed(3)}, ${mindarRawPos.z.toFixed(3)})\n`
-        : `raw: (n/a)\n`) +
-      (mindarNormPos
-        ? `norm: (${mindarNormPos.x.toFixed(3)}, ${mindarNormPos.y.toFixed(3)}, ${mindarNormPos.z.toFixed(3)})\n`
-        : `norm: (n/a)\n`) +
-      (mindarPos
-        ? `scaled: (${mindarPos.x.toFixed(3)}, ${mindarPos.y.toFixed(3)}, ${mindarPos.z.toFixed(3)})\n`
-        : `scaled: (n/a)\n`) +
       `camL: (${camLocalPos.x.toFixed(3)}, ${camLocalPos.y.toFixed(3)}, ${camLocalPos.z.toFixed(3)})\n` +
       `rot: (${camRot.x.toFixed(1)}, ${camRot.y.toFixed(1)}, ${camRot.z.toFixed(1)})\n` +
-      `root: (${rootPos.x.toFixed(3)}, ${rootPos.y.toFixed(3)}, ${rootPos.z.toFixed(3)})\n` +
       `yOff: ${WORLD_Y_OFFSET.toFixed(2)} mode: ${ALIGN_MODE}\n` +
       (stabilizedPos
         ? `stb: (${stabilizedPos.x.toFixed(3)}, ${stabilizedPos.y.toFixed(3)}, ${stabilizedPos.z.toFixed(3)})`

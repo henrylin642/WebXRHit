@@ -9,6 +9,14 @@ body {
   background-color: transparent !important;
   /* Allow Camera Feed */
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  image-rendering: pixelated;
+  /* Sharpness fix */
+}
+
+video,
+canvas {
+  image-rendering: pixelated;
+  object-fit: contain;
 }
 
 /* Ensure MindAR video container is below UI */
