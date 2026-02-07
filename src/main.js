@@ -363,15 +363,15 @@ function showConfirmButton() {
   const statusText = document.querySelector('#transition-overlay div div:nth-child(3)');
   const icon = document.getElementById('lock-status-icon');
 
-  if (btn) btn.style.display = 'block';
-  if (statusText) statusText.innerText = '位置已鎖定！';
+  if (statusText) statusText.innerText = '位置已鎖定，正在進入 AR...';
   if (icon) icon.innerText = '✅';
 
-  // 監聽點擊進入 WebXR
-  btn.onclick = () => {
-    btn.style.display = 'none';
+  // Automated transition after 1 second
+  log("Space locked. Auto-transitioning to WebXR in 1s...");
+  setTimeout(() => {
+    if (btn) btn.style.display = 'none';
     finalizeStabilization();
-  };
+  }, 1000);
 }
 
 function cancelPoseStabilization() {

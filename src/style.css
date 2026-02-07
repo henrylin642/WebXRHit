@@ -180,8 +180,8 @@ button:active {
 
 #camera-pose {
   position: absolute;
-  bottom: 190px;
-  right: 20px;
+  top: 150px;
+  left: 10px;
   color: #00ff00;
   font-family: monospace;
   font-size: 10px;
@@ -194,8 +194,8 @@ button:active {
 
 #mindar-pose {
   position: absolute;
-  bottom: 240px;
-  left: 20px;
+  top: 60px;
+  left: 10px;
   color: #00ff00;
   font-family: monospace;
   font-size: 10px;
@@ -314,14 +314,30 @@ button:active {
   right: 10px;
   height: 120px;
   overflow-y: auto;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.82);
   color: #0f0;
   font-family: monospace;
   font-size: 11px;
   padding: 8px;
-  z-index: 99999;
+  z-index: 1000;
+  /* Lower than modal but above canvas */
   pointer-events: none;
   border: 1px solid #444;
   border-radius: 4px;
   white-space: pre-wrap;
+}
+
+#metrics-overlay {
+  position: fixed;
+  top: 60px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #0f0;
+  padding: 10px;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 11px;
+  pointer-events: none;
+  z-index: 10000;
+  display: none;
 }
